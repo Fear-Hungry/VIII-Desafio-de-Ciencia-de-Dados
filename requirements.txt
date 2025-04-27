@@ -1,0 +1,4 @@
+yahoofinancials
+yfinance
+openbb # gostei muitooo desse
+polars
