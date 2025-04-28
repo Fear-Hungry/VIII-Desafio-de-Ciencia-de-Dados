@@ -3,8 +3,8 @@
 ### Divisão de tarefas
 
 - [] Ingestão dos dados
-    - [] Conectar à API de dados escolhida
-    - [] Log de meta-dados (timestamp da coleta (5 em 5 minutos), parâmetros da API) para rastreabilidade.
+    - [x] Conectar à API de dados escolhida
+    - [x] Log de meta-dados (timestamp da coleta (5 em 5 minutos), parâmetros da API) para rastreabilidade.
 - [] Armazenamento
     - [] Armazenar em um arquivo CSV (ou Parquet, que é mais otimizado que CSV).
 - [] Limpeza & validação
