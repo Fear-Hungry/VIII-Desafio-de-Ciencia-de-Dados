@@ -2,16 +2,16 @@
 
 ### Divisão de tarefas
 
-- [] Ingestão dos dados
+- [x] Ingestão dos dados
     - [x] Conectar à API de dados escolhida
     - [x] Log de meta-dados (timestamp da coleta (5 em 5 minutos), parâmetros da API) para rastreabilidade.
-- [] Armazenamento
-    - [] Armazenar em um arquivo CSV (ou Parquet, que é mais otimizado que CSV).
+- [x] Armazenamento
+    - [x] Armazenar em um arquivo CSV (ou Parquet, que é mais otimizado que CSV).
 - [] Limpeza & validação
-    - [] Remover dados duplicados
-    - [] Remover dados inconsistentes
-    - [] Remover dados incompletos
-    - [] Remover outliers
+    - [x] Remover dados duplicados
+    - [x] Remover dados inconsistentes
+    - [x] Remover dados incompletos
+    - [x] Remover outliers
     - [] Normalização dos dados
 - [] Transformação & Engenharia de features
     - [] Criação de novas features
