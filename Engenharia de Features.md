@@ -5,18 +5,18 @@
 - [x] Ingestão dos dados
     - [x] Conectar à API de dados escolhida
     - [x] Log de meta-dados (timestamp da coleta (5 em 5 minutos), parâmetros da API) para rastreabilidade.
-- [] Armazenamento
-    - [] Armazenar em um arquivo CSV (ou Parquet, que é mais otimizado que CSV).
+- [x] Armazenamento
+    - [x] Armazenar em um arquivo CSV (ou Parquet, que é mais otimizado que CSV).
 - [x] Limpeza & validação
     - [x] Remover dados duplicados
     - [x] Remover dados inconsistentes
     - [x] Remover dados incompletos
-    - [] Remover outliers
-    - [] Normalização dos dados
-- [] Transformação & Engenharia de features
-    - [] Criação de novas features
-    - [] Extração de features
-    - [] Seleção de features
+    - [x] Remover outliers
+    - [x] Normalização dos dados
+- [x] Transformação & Engenharia de features
+    - [x] Criação de novas features
+    - [x] Extração de features
+    - [x] Seleção de features
 - [] Materialização & logging
 - [] Preparação final para modelagem
     - [] Exportar feature store em formato compatível com o ambiente de treinamento de RL
