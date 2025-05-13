@@ -1,3 +1,28 @@
 .devcontainer/
 .env
-.venv
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+*.db
+.DS_Store
+*.parquet
+*.csv
+*.log
+logs/
+models/ckpt/
+tb/
+# Arquivos temporários de notebooks
+*.ipynb_checkpoints/
+# Arquivos de configuração de IDE
+.vscode/
+.idea/
+# Dados brutos e processados
+/data/
+/data_loader/__pycache__/
+/events/__pycache__/
+/env/__pycache__/
+/indicators/__pycache__/
+models/

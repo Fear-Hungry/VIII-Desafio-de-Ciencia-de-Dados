@@ -1,5 +1,40 @@
-yahoofinancials
-yfinance
-openbb # gostei muitooo desse
+# Bibliotecas essenciais para manipulação de dados
 polars
+pandas
+numpy
+pyarrow
+
+# Visualização
+matplotlib
+seaborn
+plotly
+
+# Machine Learning & Reinforcement Learning
+scikit-learn
 torch
+tensorflow
+stable-baselines3
+ray[rllib]
+pettingzoo
+
+streamlit
+streamlit-autorefresh
+
+tqdm
+joblib
+gym
+dill
+
+fastapi
+uvicorn
+docker
+python-dotenv
+
+
+pytest>=7.0.0
+pytest-cov>=4.1.0
+
+optuna>=3.0.0
+deap
+
+backtesting
