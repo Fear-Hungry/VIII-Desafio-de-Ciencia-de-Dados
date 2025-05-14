@@ -1,5 +1,3 @@
-Claro! Abaixo está seu texto **revisado, corrigido e formatado** de maneira clara e fluida, mantendo a estrutura de tópicos que você já havia organizado:
-
 ---
 
 ## Introdução aos Transformers
