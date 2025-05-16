@@ -62,12 +62,37 @@ try:
     # Garantir que os dados estão ordenados pelo índice (data)
     df.sort_index(inplace=True)
 
+    # Tratar valores ausentes (NaN) nas colunas OHLCV
+    # Primeiro, identificar as colunas OHLCV que realmente existem no DataFrame
+    ohlcv_cols_to_fill = [col for col in ['Open', 'High', 'Low', 'Close', 'Volume'] if col in df.columns]
+    if ohlcv_cols_to_fill:
+        df[ohlcv_cols_to_fill] = df[ohlcv_cols_to_fill].fillna(method='ffill').fillna(method='bfill')
+        # Se ainda restarem NaNs (ex: arquivo só com NaNs), podemos optar por remover ou alertar.
+        # Por simplicidade, vamos verificar e remover linhas que ainda possam ter NaN nas colunas obrigatórias.
+        # Colunas obrigatórias para o backtest após o preenchimento
+        cols_obrigatorias_check_nan = ['Open', 'High', 'Low', 'Close']
+        df.dropna(subset=[col for col in cols_obrigatorias_check_nan if col in df.columns], inplace=True)
+
     # Verificar se as colunas obrigatórias agora existem com o nome padrão
     required_after_rename = {'Open', 'High', 'Low', 'Close'}
     missing_after_rename = required_after_rename - set(df.columns)
     if missing_after_rename:
          # Este erro não deveria ocorrer se a lógica anterior funcionou
         raise ValueError(f"Erro interno: Colunas obrigatórias {missing_after_rename} não encontradas após o mapeamento.")
+
+    # Validar e converter tipos de dados para colunas OHLCV
+    for col_name in final_columns: # final_columns já contém 'Open', 'High', 'Low', 'Close' e 'Volume' se existirem
+        if col_name in df.columns: # Checagem extra de segurança
+            # Tentar converter para numérico, erros viram NaN (que já foram tratados, mas pode pegar outros formatos não numéricos)
+            df[col_name] = pd.to_numeric(df[col_name], errors='coerce')
+            if df[col_name].isnull().any():
+                # Se a conversão introduziu NaNs, isso indica dados não numéricos.
+                # Poderíamos remover essas linhas ou lançar um erro. Por ora, vamos remover.
+                print(f"Aviso: A coluna '{col_name}' continha valores não numéricos que foram convertidos para NaN e as linhas correspondentes removidas.")
+                df.dropna(subset=[col_name], inplace=True)
+
+            if not pd.api.types.is_numeric_dtype(df[col_name]):
+                raise ValueError(f"A coluna '{col_name}' não pôde ser convertida para um tipo numérico e é essencial para o backtest.")
 
     if 'Volume' not in df.columns and 'Volume' in found_cols:
          print("Aviso: A coluna 'Volume' foi encontrada mas não mapeada corretamente. Verifique a lógica de mapeamento.")
@@ -137,6 +162,12 @@ class RsiHeuristic(Strategy):
 
 # 2. Instancie e execute:
 if 'df' in locals() and not df.empty: # Verifica se o DataFrame foi carregado
+    # Verificar se há dados suficientes para o backtest
+    min_data_points = RsiHeuristic.n_rsi + 10 # Um pouco mais que o período do RSI, por exemplo
+    if len(df) < min_data_points:
+        print(f"Erro: Dados insuficientes para executar o backtest. São necessários pelo menos {min_data_points} pontos de dados, mas foram encontrados {len(df)}.")
+        exit()
+
     bt = Backtest(
         df,                     # DataFrame com os dados carregados
         RsiHeuristic,
