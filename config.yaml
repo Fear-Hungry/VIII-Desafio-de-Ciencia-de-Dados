@@ -1,19 +1,9 @@
-seed: 42
-# SPLIT TEMPORAL ------------------------------------------------
+SEED: 42
 
-train_end: 2022-12-31
-val_start: 2023-01-01
-val_end: 2024-05-31
-test_start: 2024-06-01
-test_end: 2024-12-31
+DATA_PATH: "data/AAPL_1minute.parquet"
 
-# TRAINING ------------------------------------------------
+DATA_TRAIN: 2020-01-01
 
-total_timesteps: 1_000_000
-checkpoint_every: 100_000
-batch_size: 512
-n_steps: 1024
-gamma: 0.99
-learning_rate: 5e-4
-clip_range: 0.3
-ent_coef: 0.005
+DATA_TEST: 2023-01-01
+
+DATA_VALID: 2024-12-31

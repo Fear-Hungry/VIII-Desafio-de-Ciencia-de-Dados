@@ -106,8 +106,7 @@ class IchimokuCloudIndicator(Indicator):
 
         result_df = data_with_all_lines.select(
             [
-                # Mantém a primeira coluna (geralmente data/índice)
-                *(data.columns[:1] if data.columns else []),
+                pl.col("date"),
                 *ichimoku_cols,
             ]
         )

@@ -86,7 +86,7 @@ class RSIIndicator(Indicator):
         # Combina com a coluna de índice/tempo original
         if data.columns:
             result_df = pl.concat(
-                [data.select(data.columns[0]), rsi_series], how="horizontal"
+                [data.select("date"), rsi_series], how="horizontal"
             )
         else:
             result_df = rsi_series

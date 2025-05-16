@@ -22,7 +22,7 @@ streamlit-autorefresh
 
 tqdm
 joblib
-gym
+gymnasium
 dill
 
 fastapi
@@ -38,3 +38,5 @@ optuna>=3.0.0
 deap
 
 backtesting
+pytorch-ignite
+mplfinance

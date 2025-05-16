@@ -80,12 +80,12 @@ class CCIIndicator(Indicator):
         )
 
         # Selecionar e retornar a coluna CCI, mantendo a coluna de data/índice original
-        result_df = data_with_cci.select(
-            [
-                # Mantém a primeira coluna (geralmente data/índice)
-                *(data.columns[:1] if data.columns else []),
-                pl.col(f"CCI_{period}"),
-            ]
-        )
+        if "date" not in data.columns:
+            raise ValueError("Coluna 'date' não encontrada no DataFrame de entrada.")
+
+        result_df = data_with_cci.select([
+            pl.col("date"), # Selecionar explicitamente
+            pl.col(f"CCI_{self.period}") # Usar self.period aqui
+        ])
 
         return result_df

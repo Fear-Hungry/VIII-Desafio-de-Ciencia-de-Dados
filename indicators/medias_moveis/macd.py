@@ -1,3 +1,4 @@
+from typing import List, Union
 import polars as pl
 
 # --- Import relativo da classe base e config ---
@@ -8,82 +9,103 @@ from ..types import IndicatorConfig, IndicatorType
 
 
 class MACDIndicator(Indicator):
-    """Calcula o Moving Average Convergence Divergence (MACD).
+    """
+    Moving Average Convergence Divergence (MACD).
 
-    O MACD é um indicador de momentum que segue tendências e mostra a relação
-    entre duas médias móveis exponenciais dos preços. Ele consiste na linha MACD,
-    linha de Sinal (uma EMA da linha MACD) e o Histograma (diferença entre
-    MACD e Sinal).
+    MACD é um indicador de tendência que mostra a relação entre duas médias móveis
+    exponenciais (EMAs) dos preços de um ativo.
+
+    Exemplos:
+        >>> # Criar um indicador MACD com parâmetros padrão (12,26,9)
+        >>> macd = MACDIndicator(IndicatorConfig(type=IndicatorType.MACD, params=[12, 26, 9]))
+        >>> # ou diretamente com os parâmetros
+        >>> macd = MACDIndicator([12, 26, 9])
+        >>> # Calcular o indicador para um DataFrame
+        >>> df_com_macd = macd.calculate(df)
     """
 
-    def __init__(self, config: IndicatorConfig):
-        """Inicializa o indicador MACD com sua configuração."""
-        if config.type != IndicatorType.MACD:
-            raise ValueError(
-                f"Configuração inválida para MACDIndicator. Tipo esperado: MACD, recebido: {config.type}"
-            )
-        super().__init__(config)
-        # Parâmetros: fast, slow, signal
-        self.fast_period = int(self.config.params[0])
-        self.slow_period = int(self.config.params[1])
-        self.signal_period = int(self.config.params[2])
-        self.price_column = "close"  # Assume 'close' por padrão
-
-        # Nomes das colunas de saída
-        self.param_str = f"{self.fast_period}_{self.slow_period}_{self.signal_period}"
-        self.macd_col = f"MACD_{self.param_str}"
-        self.signal_col = f"MACDSignal_{self.param_str}"
-        self.hist_col = f"MACDHist_{self.param_str}"
-
-    def calculate(self, data: pl.DataFrame) -> pl.DataFrame:
+    def __init__(self, config: Union[IndicatorConfig, List[int]]):
         """
-        Calcula a linha MACD, linha de Sinal e Histograma.
+        Inicializa o indicador MACD.
 
         Args:
-            data: DataFrame Polars com pelo menos a coluna de preço (padrão: 'Close').
-                  Deve estar ordenado por data.
+            config: Configuração do indicador (IndicatorConfig) ou diretamente
+                   uma lista com [período_curto, período_longo, sinal].
+        """
+        if isinstance(config, list):
+            # Se for uma lista, assume que são os parâmetros [fast, slow, signal]
+            if len(config) != 3:
+                raise ValueError("MACD precisa de 3 parâmetros: [fast_period, slow_period, signal_period]")
+            self.fast_period, self.slow_period, self.signal_period = config
+            # Cria uma configuração padrão com os parâmetros fornecidos
+            self.config = IndicatorConfig(
+                type=IndicatorType.MACD,
+                params=config
+            )
+        else:
+            # Assume que é um IndicatorConfig
+            self.config = config
+            params = self.config.params
+            if len(params) != 3:
+                params = [12, 26, 9]  # valores padrão
+            self.fast_period, self.slow_period, self.signal_period = params
+
+        # Nomes das colunas de saída
+        self.macd_line_col = "macd_line"
+        self.signal_line_col = "macd_signal"
+        self.histogram_col = "macd_hist"
+
+    def calculate(self, df: pl.DataFrame) -> pl.DataFrame:
+        """
+        Calcula o indicador MACD para o DataFrame fornecido.
+
+        Args:
+            df: DataFrame com dados OHLCV.
 
         Returns:
-            DataFrame Polars com as colunas MACD, Sinal e Histograma.
+            DataFrame com as colunas do indicador MACD adicionadas.
         """
+        if "close" not in df.columns:
+            raise ValueError("A coluna 'close' é necessária para calcular o MACD")
 
-        if self.price_column not in data.columns:
-            raise ValueError(
-                f"DataFrame de entrada precisa conter a coluna: '{self.price_column}'"
-            )
+        # Calcular EMAs - Alphas
+        fast_alpha = 2 / (self.fast_period + 1)
+        slow_alpha = 2 / (self.slow_period + 1)
+        signal_alpha = 2 / (self.signal_period + 1)
 
-        # Alphas para as EMAs
-        alpha_fast = 2.0 / (self.fast_period + 1.0)
-        alpha_slow = 2.0 / (self.slow_period + 1.0)
-        alpha_signal = 2.0 / (self.signal_period + 1.0)
+        # Definir as expressões para cálculo
+        fast_ema_expr = pl.col("close").ewm_mean(alpha=fast_alpha)
+        slow_ema_expr = pl.col("close").ewm_mean(alpha=slow_alpha)
 
-        # Calcula EMAs e linha MACD
-        data_with_macd = data.with_columns(
-            [
-                pl.col(self.price_column)
-                .ewm_mean(alpha=alpha_fast, adjust=False, min_periods=self.fast_period)
-                .alias("fast_ema"),
-                pl.col(self.price_column)
-                .ewm_mean(alpha=alpha_slow, adjust=False, min_periods=self.slow_period)
-                .alias("slow_ema"),
-            ]
-        ).with_columns((pl.col("fast_ema") - pl.col("slow_ema")).alias(self.macd_col))
+        # A linha MACD é calculada primeiro
+        macd_line_expr = (fast_ema_expr - slow_ema_expr).alias(self.macd_line_col)
 
-        # Calcula linha de Sinal e Histograma
-        data_with_signal = data_with_macd.with_columns(
-            pl.col(self.macd_col)
-            .ewm_mean(alpha=alpha_signal, adjust=False, min_periods=self.signal_period)
-            .alias(self.signal_col)
-        ).with_columns(
-            (pl.col(self.macd_col) - pl.col(self.signal_col)).alias(self.hist_col)
-        )
+        # Calcular o DataFrame com a linha MACD
+        # As colunas temporárias _fast_ema e _slow_ema não são estritamente necessárias
+        # se macd_line_expr for auto-contida, mas para clareza, podemos fazer assim:
+        # df_with_macd_line = df.with_columns(macd_line_expr)
+        # Ou, para evitar múltiplas `with_columns` para colunas que dependem umas das outras,
+        # podemos usar `select` para criar o contexto e depois `with_columns`.
 
-        output_columns = [
-            *(data.columns[:1] if data.columns else []),
-            self.macd_col,
-            self.signal_col,
-            self.hist_col,
-        ]
-        result_df = data_with_signal.select(output_columns)
+        df_calculated = df.select([
+            pl.col("date"), # Preserva a coluna 'date'
+            fast_ema_expr.alias("_fast_ema_temp"), # EMA rápida como coluna temporária
+            slow_ema_expr.alias("_slow_ema_temp")  # EMA lenta como coluna temporária
+        ]).with_columns([
+            (pl.col("_fast_ema_temp") - pl.col("_slow_ema_temp")).alias(self.macd_line_col)
+        ]).with_columns([
+            pl.col(self.macd_line_col).ewm_mean(alpha=signal_alpha).alias(self.signal_line_col)
+        ]).with_columns([
+            (pl.col(self.macd_line_col) - pl.col(self.signal_line_col)).alias(self.histogram_col)
+        ])
 
-        return result_df
+        # Retorna um novo DataFrame apenas com 'date' e as colunas MACD calculadas
+        return df_calculated.select([
+            "date",
+            self.macd_line_col,
+            self.signal_line_col,
+            self.histogram_col
+        ])
+
+    def __str__(self) -> str:
+        return f"MACD({self.fast_period},{self.slow_period},{self.signal_period})"

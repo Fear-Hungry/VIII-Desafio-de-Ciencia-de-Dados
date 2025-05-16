@@ -26,3 +26,5 @@ tb/
 /env/__pycache__/
 /indicators/__pycache__/
 models/
+
+tb_logs/

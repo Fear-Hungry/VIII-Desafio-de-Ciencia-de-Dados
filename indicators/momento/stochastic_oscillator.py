@@ -94,7 +94,7 @@ class StochasticOscillatorIndicator(Indicator):
         if data.columns:
             result_df = pl.concat(
                 [
-                    data.select(data.columns[0]),  # Índice/Tempo
+                    data.select("date"),  # Alterado data.columns[0] para "date"
                     k_series,  # Coluna K
                     d_series,  # Coluna D
                 ],

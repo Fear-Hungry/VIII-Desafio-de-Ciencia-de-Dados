@@ -57,18 +57,21 @@ class BollingerBandsIndicator(Indicator):
         lower_band = middle_band - (rolling_std * std_dev_multiplier)
 
         # Criar DataFrame de resultado
+        if "date" not in data.columns:
+            raise ValueError("Coluna 'date' não encontrada no DataFrame de entrada.")
+
         result_df = data.with_columns(
             [
-                middle_band.alias(f"BB_Middle_{period}"),
-                upper_band.alias(f"BB_Upper_{period}"),
-                lower_band.alias(f"BB_Lower_{period}"),
+                middle_band.alias(f"BB_Middle_{self.period}"),
+                upper_band.alias(f"BB_Upper_{self.period}"),
+                lower_band.alias(f"BB_Lower_{self.period}"),
             ]
         ).select(
             [
-                data.columns[0],
-                f"BB_Middle_{period}",
-                f"BB_Upper_{period}",
-                f"BB_Lower_{period}",
+                pl.col("date"),
+                pl.col(f"BB_Middle_{self.period}"),
+                pl.col(f"BB_Upper_{self.period}"),
+                pl.col(f"BB_Lower_{self.period}"),
             ]
         )
 

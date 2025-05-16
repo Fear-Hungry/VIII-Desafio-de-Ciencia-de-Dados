@@ -62,8 +62,15 @@ class VWAPIndicator(Indicator):
         )
 
         # Montar resultado
-        result_df = data.with_columns(vwap.alias("VWAP")).select(
-            [data.columns[0], "VWAP"]
+        if "date" not in data.columns:
+            raise ValueError("Coluna 'date' não encontrada no DataFrame de entrada.")
+
+        # O nome da coluna do VWAP deve incluir o período para evitar conflitos
+        # se diferentes períodos de VWAP forem calculados.
+        vwap_col_name = f"VWAP_{self.period}"
+
+        result_df = data.with_columns(vwap.alias(vwap_col_name)).select(
+            [pl.col("date"), pl.col(vwap_col_name)]
         )
 
         return result_df

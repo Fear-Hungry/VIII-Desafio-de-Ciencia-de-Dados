@@ -55,18 +55,21 @@ class DonchianChannelIndicator(Indicator):
         middle_channel = (upper_channel + lower_channel) / 2
 
         # Criar DataFrame de resultado
+        if "date" not in data.columns:
+            raise ValueError("Coluna 'date' não encontrada no DataFrame de entrada.")
+
         result_df = data.with_columns(
             [
-                upper_channel.alias(f"DC_Upper_{period}"),
-                lower_channel.alias(f"DC_Lower_{period}"),
-                middle_channel.alias(f"DC_Middle_{period}"),
+                upper_channel.alias(f"DC_Upper_{self.period}"),
+                lower_channel.alias(f"DC_Lower_{self.period}"),
+                middle_channel.alias(f"DC_Middle_{self.period}"),
             ]
         ).select(
             [
-                data.columns[0],
-                f"DC_Upper_{period}",
-                f"DC_Lower_{period}",
-                f"DC_Middle_{period}",
+                pl.col("date"),
+                pl.col(f"DC_Upper_{self.period}"),
+                pl.col(f"DC_Lower_{self.period}"),
+                pl.col(f"DC_Middle_{self.period}"),
             ]
         )
 

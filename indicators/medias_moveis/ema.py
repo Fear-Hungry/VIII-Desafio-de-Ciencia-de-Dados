@@ -1,3 +1,4 @@
+from typing import Union
 import polars as pl
 
 # --- Import relativo da classe base e config ---
@@ -8,61 +9,70 @@ from ..types import IndicatorConfig, IndicatorType
 
 
 class EMAIndicator(Indicator):
-    """Calcula a Média Móvel Exponencial (EMA).
+    """
+    Média Móvel Exponencial (EMA).
 
-    A EMA é uma média móvel que dá mais peso aos preços mais recentes,
-    tornando-a mais reativa a mudanças recentes de preço do que a SMA.
+    A EMA dá mais peso aos preços mais recentes, adaptando-se mais
+    rapidamente a mudanças nos preços do que a SMA.
+
+    Exemplos:
+        >>> # Criar um indicador EMA de 12 períodos
+        >>> ema = EMAIndicator(IndicatorConfig(type=IndicatorType.EMA, params=[12]))
+        >>> # ou diretamente com o período
+        >>> ema = EMAIndicator(12)
+        >>> # Calcular o indicador para um DataFrame
+        >>> df_com_ema = ema.calculate(df)
     """
 
-    def __init__(self, config: IndicatorConfig):
-        """Inicializa o indicador EMA com sua configuração."""
-        if config.type != IndicatorType.EMA:
-            raise ValueError(
-                f"Configuração inválida para EMAIndicator. Tipo esperado: EMA, recebido: {config.type}"
-            )
-        super().__init__(config)
-        self.period = int(self.config.params[0])
-        # TODO: Permitir configurar a coluna de preço (ex: 'Close', 'Open') via config?
-        self.price_column = "close"  # Assume 'close' por padrão
-
-    def calculate(self, data: pl.DataFrame) -> pl.DataFrame:
+    def __init__(self, config: Union[IndicatorConfig, int]):
         """
-        Calcula a EMA usando Polars.
+        Inicializa o indicador EMA.
 
         Args:
-            data: DataFrame Polars com pelo menos a coluna de preço (padrão: 'Close').
-                  Deve estar ordenado por data.
+            config: Configuração do indicador (IndicatorConfig) ou diretamente
+                   o período como inteiro.
+        """
+        if isinstance(config, int):
+            # Se for só um número, assume que é o período
+            self.span = config
+            # Cria uma configuração padrão com o período fornecido
+            self.config = IndicatorConfig(
+                type=IndicatorType.EMA,
+                params=[self.span]
+            )
+        else:
+            # Assume que é um IndicatorConfig
+            self.config = config
+            self.span = self.config.params[0] if self.config.params else 12
+
+        # Nome para a coluna de saída
+        self.output_column = f"ema_{self.span}"
+
+    def calculate(self, df: pl.DataFrame) -> pl.DataFrame:
+        """
+        Calcula o indicador EMA para o DataFrame fornecido.
+
+        Args:
+            df: DataFrame com dados OHLCV.
 
         Returns:
-            DataFrame Polars com a coluna 'ema_{period}'.
+            DataFrame com a coluna do indicador EMA adicionada.
         """
+        if "close" not in df.columns:
+            raise ValueError("A coluna 'close' é necessária para calcular o EMA")
+        if "date" not in df.columns:
+            raise ValueError("A coluna 'date' é necessária para o resultado do EMA")
 
-        if self.price_column not in data.columns:
-            raise ValueError(
-                f"DataFrame de entrada precisa conter a coluna: '{self.price_column}'"
-            )
-
-        period = self.period
-        alpha = 2.0 / (period + 1.0)
-        output_col_name = self.column_name  # Vem da config (ex: ema_14)
-
-        # Calcula a EMA usando ewm_mean
-        # adjust=False é mais comum em finanças, focando na recursividade
-        # min_periods garante NaNs no início
-        ema_series = data.select(
-            pl.col(self.price_column)
-            .ewm_mean(alpha=alpha, adjust=False, min_periods=period)
-            .alias(output_col_name)
-        )
-
-        # Se precisar manter a coluna de data/índice original:
-        if data.columns:
-            result_df = pl.concat(
-                [data.select(data.columns[0]), ema_series], how="horizontal"
-            )
-            # Renomeia a coluna de índice/tempo se necessário (opcional)
-            # result_df = result_df.rename({data.columns[0]: "Index"})
-        else:
-            result_df = ema_series
+        # Calcula EMA e seleciona a coluna de data junto com a nova coluna EMA
+        # O .ewm_mean() já retorna uma Series quando usado em um select/with_columns.
+        # O parâmetro `span` é mais comum para EMA do que `alpha` diretamente.
+        # `adjust=False` é o comportamento padrão para EMAs em finanças (usa os pesos corretos desde o início).
+        result_df = df.select([
+            pl.col("date"),
+            pl.col("close").ewm_mean(span=self.span, adjust=False).alias(self.output_column)
+        ])
 
         return result_df
+
+    def __str__(self) -> str:
+        return f"EMA({self.span})"

@@ -36,30 +36,20 @@ class OBVIndicator(Indicator):
                 f"DataFrame de entrada precisa conter as colunas: {required_cols}"
             )
 
-        # Calcular a mudança no preço de fechamento
-        close_diff = pl.col("close").diff()
+        # Calcula a mudança no preço de fechamento e o volume sinalizado
+        # como novas colunas temporárias
+        temp_df = data.with_columns(
+            pl.col("close").diff().alias("_close_diff_temp_")
+        ).with_columns(
+            pl.when(pl.col("_close_diff_temp_") > 0).then(pl.col("volume"))
+            .when(pl.col("_close_diff_temp_") < 0).then(-pl.col("volume"))
+            .otherwise(0).alias("_signed_volume_temp_")
+        )
 
-        # Determinar o sinal do volume com base na mudança de preço
-        # sign() retorna 1 para positivo, -1 para negativo, 0 para zero
-        signed_volume = (
-            pl.when(close_diff > 0)
-            .then(pl.col("volume"))
-            .when(close_diff < 0)
-            .then(-pl.col("volume"))
-            .otherwise(0)
-        )  # Se não houve mudança no preço, OBV não muda
-
-        # Calcular o OBV como a soma cumulativa do volume sinalizado
-        # A primeira linha do OBV pode ser 0 ou o volume do primeiro dia.
-        # Usaremos cumsum que começa com 0 implícito para a diferença.
-        # Para ter o valor real, precisamos preencher o primeiro NaN.
-        obv = signed_volume.cumsum(reverse=False).fill_null(
-            0
-        )  # Começa a acumulação do segundo dia
-        # O primeiro dia tem OBV 0 por esta lógica.
-        # Alternativa: iniciar com volume[0]
-
-        # Adicionar coluna OBV ao DataFrame original
-        result_df = data.with_columns(obv.alias("OBV")).select([data.columns[0], "OBV"])
+        # Calcula o OBV usando cumsum na nova coluna e seleciona
+        # A primeira coluna de 'data' (data.columns[0]) é geralmente a coluna de data/tempo
+        result_df = temp_df.with_columns(
+            pl.col("_signed_volume_temp_").cumsum().fill_null(0).alias("OBV")
+        ).select([data.columns[0], "OBV"])
 
         return result_df

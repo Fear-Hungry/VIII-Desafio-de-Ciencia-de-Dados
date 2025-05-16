@@ -121,22 +121,30 @@ class ADXIndicator(Indicator):
             .otherwise(0.0)  # Se soma é 0, DX é 0
             .ewm_mean(alpha=alpha, adjust=False, min_periods=period)
             # .backward_fill() # Preenche NaNs iniciais da EWM
-            .alias(f"ADX_{period}")
-        ).select(
-            [
-                # Manter o índice/coluna de data original se existir
-                *(data.columns[:1] if data.columns else []),
-                pl.col(f"ADX_{period}"),
-                pl.col(f"+DI_{period}"),
-                pl.col(f"-DI_{period}"),
-            ]
+            .alias(f"ADX_{self.period}")
         )
 
+        if "date" not in data_with_adx.columns:
+            if "date" not in data.columns:
+                raise ValueError("Coluna 'date' não encontrada no DataFrame de entrada.")
+
+        # Seleciona as colunas finais
+        selected_cols = [
+            pl.col("date"),
+            pl.col(f"ADX_{self.period}"),
+            pl.col(f"+DI_{self.period}"),
+            pl.col(f"-DI_{self.period}")
+        ]
+        # Garante que todas as colunas selecionadas existem em data_with_adx
+        data_to_select_from = data_with_adx
+
+        # O código original fazia a seleção e depois um fill_null separado para ADX.
+        # Vamos manter a seleção primeiro, depois o fill_null.
+        result_selection_df = data_to_select_from.select(selected_cols)
+
         # Preencher NaNs iniciais do ADX que a EWM cria
-        # O backward_fill comentado acima não funciona bem em todos os casos
-        # Fazemos isso separadamente para mais controle
-        final_df = data_with_adx.with_columns(
-            pl.col(f"ADX_{period}").fill_null(strategy="backward")
+        final_df = result_selection_df.with_columns(
+            pl.col(f"ADX_{self.period}").fill_null(strategy="backward")
         )
 
         return final_df

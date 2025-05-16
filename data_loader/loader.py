@@ -64,8 +64,8 @@ logger = logging.getLogger(__name__)
 # !!! ATENÇÃO: Dependência de um pacote/módulo 'indicators' externo !!!
 try:
     # Alterado para importação absoluta do pacote indicators da raiz do projeto
-    from indicators import momentum, moving_averages, volatility
-    from indicators.types import Indicator # Importar o Enum IndicatorType como Indicator para compatibilidade local ou renomear no uso
+    from indicators import momento, medias_moveis, volatilidade, volume, tendencia, niveis
+    from indicators.types import IndicatorType as Indicator # Importar o Enum IndicatorType como Indicator para compatibilidade local ou renomear no uso
 
     INDICATORS_AVAILABLE = True
 except ImportError as e_import_ind:
@@ -92,7 +92,6 @@ except ImportError as e_import_ind:
         MACD = "macd"
         RSI_14 = "rsi_14"
         BB_20_2 = "bb_20_2"
-        pass
 
 
 class DataLoader:
@@ -182,7 +181,13 @@ class DataLoader:
             df = self.load_from_csv(filepath, **kwargs)
         if df is None:
             return None
-        df = self.preprocess(df, **preprocess_params)
+
+        # Extrair add_log_transforms do dicionário antes de desempacotar
+        add_log_transforms = preprocess_params.pop('add_log_transforms', False) if preprocess_params else False
+
+        # Chamar o método preprocess com o parâmetro explícito
+        df = self.preprocess(df, add_log_transforms=add_log_transforms, **preprocess_params)
+
         # Salva no cache
         if cache_path:
             self.save_to_parquet(df, str(cache_path))
@@ -383,6 +388,7 @@ class DataLoader:
         use_cache: bool = True,
         preprocess_params: dict = None,
         source_path: str = None,
+        add_log_transforms: bool = False,
     ) -> pl.DataFrame:
         """
         Realiza pré-processamento básico em um DataFrame Polars, salvando no cache se configurado.
@@ -392,6 +398,7 @@ class DataLoader:
             use_cache (bool): Se True, salva o resultado no cache (default: True).
             preprocess_params (dict): Parâmetros do preprocessamento (default: None).
             source_path (str): Caminho do arquivo-fonte original (necessário para cache).
+            add_log_transforms (bool): Se True, adiciona transformações logarítmicas para colunas numéricas (default: False).
         Returns:
             pl.DataFrame: DataFrame Polars pré-processado.
         """
@@ -494,6 +501,26 @@ class DataLoader:
                         )
                         # Poderia tentar limpar a coluna antes do cast ou remover
 
+        # Adicionar transformações logarítmicas se solicitado
+        if add_log_transforms or (preprocess_params and preprocess_params.get('add_log_transforms', False)):
+            logger.info("Adicionando transformações logarítmicas para colunas OHLC...")
+            log_cols = ["open", "high", "low", "close"]
+            for col in log_cols:
+                if col in df.columns:
+                    try:
+                        # Verifica se já há valores menores ou iguais a zero
+                        min_val = df[col].min()
+                        if min_val <= 0:
+                            logger.warning(f"Coluna '{col}' contém valores <= 0, que não podem ser logaritmizados. Pulando.")
+                            continue
+                        # Adiciona coluna com transformação logarítmica
+                        df = df.with_columns(
+                            pl.col(col).log().alias(f"{col}_log")
+                        )
+                        logger.debug(f"Adicionada coluna '{col}_log' com transformação logarítmica.")
+                    except Exception as e_log:
+                        logger.error(f"Erro ao adicionar transformação logarítmica para '{col}': {e_log}")
+
         # Remover linhas com valores ausentes em colunas críticas (OHLCV), APÓS cast
         cols_to_check_nulls = [
             col
@@ -547,7 +574,7 @@ class DataLoader:
         return df
 
     def add_technical_indicators(
-        self, df: pl.DataFrame, indicators_to_add: Optional[List[Indicator]] = None
+        self, df: pl.DataFrame, indicators_to_add: Optional[List['indicators.types.IndicatorConfig']] = None
     ) -> pl.DataFrame:
         """
         Adiciona indicadores técnicos especificados ao DataFrame Polars.
@@ -558,9 +585,9 @@ class DataLoader:
         Args:
             df (pl.DataFrame): DataFrame Polars com dados financeiros pré-processados
                                (espera colunas como 'close', 'high', 'low', 'volume').
-            indicators_to_add (Optional[List[Indicator]]): Lista de Enum `Indicator`
+            indicators_to_add (Optional[List[indicators.types.IndicatorConfig]]): Lista de objetos `IndicatorConfig`
                 (definido em `indicators.types`) a serem adicionados.
-                Se None, calcula um conjunto padrão (SMA, EMA, MACD, RSI, BB).
+                Se None, não adiciona nenhum indicador.
 
         Returns:
             pl.DataFrame: DataFrame Polars com colunas de indicadores adicionadas,
@@ -587,110 +614,89 @@ class DataLoader:
         if "volume" in df.columns:
             required_for_indicators.append("volume")
 
-        missing_req = [
-            col
-            for col in required_for_indicators
-            if col not in df.columns or not pl.datatypes.is_numeric(df[col].dtype)
-        ]
+        # Verificar se as colunas obrigatórias existem e são numéricas
+        missing_req = []
+        for col in required_for_indicators:
+            if col not in df.columns:
+                missing_req.append(col)
+            elif not (hasattr(df[col].dtype, 'is_numeric') and df[col].dtype.is_numeric()
+                     or str(df[col].dtype).startswith(('Float', 'Int', 'Decimal'))):
+                missing_req.append(col)
+
         if missing_req:
             logger.warning(
                 f"Colunas numéricas necessárias ({missing_req}) para indicadores ausentes. Pulando."
             )
             return df
 
-        # Define conjunto padrão se nenhum for fornecido
+        # Se não foi fornecida uma lista de indicadores, retorna o DataFrame original
         if indicators_to_add is None:
-            # Usando nomes do Enum importado (se existir)
-            default_indicators_enums = [
-                Indicator.SMA_5,
-                Indicator.SMA_10,
-                Indicator.SMA_20,
-                Indicator.SMA_50,
-                Indicator.SMA_200,
-                Indicator.EMA_12,
-                Indicator.EMA_26,
-                Indicator.MACD,
-                Indicator.RSI_14,
-                Indicator.BB_20_2,
-            ]
-            # Filtra caso o Enum não tenha todos esses valores
-            indicators_to_add = [
-                ind for ind in default_indicators_enums if isinstance(ind, Indicator)
-            ]
-            if not indicators_to_add:
-                logger.warning(
-                    "Enum Indicator vazio ou não contém valores padrão. Nenhum indicador será adicionado."
-                )
-                return df
+            logger.info("Nenhum indicador foi especificado para adição. Retornando DataFrame original.")
+            return df
 
-        logger.info(
-            f"Adicionando indicadores técnicos: {[ind.name for ind in indicators_to_add]}"
-        )
-        df_with_indicators = df  # Começa com o DF original
-        processed_indicators = set()
+        # Cópia do DataFrame original para evitar modificações durante o loop
+        result_df = df.clone()
+        logger.info(f"Adicionando {len(indicators_to_add)} indicadores técnicos...")
 
-        # Mapeamento de Enum para função e argumentos (exemplo)
-        # Isso pode ser mais robusto, talvez usando um padrão de fábrica ou registro
-        indicator_map = {
-            Indicator.SMA_5: (moving_averages.add_sma, {"period": 5}),
-            Indicator.SMA_10: (moving_averages.add_sma, {"period": 10}),
-            Indicator.SMA_20: (moving_averages.add_sma, {"period": 20}),
-            Indicator.SMA_50: (moving_averages.add_sma, {"period": 50}),
-            Indicator.SMA_200: (moving_averages.add_sma, {"period": 200}),
-            Indicator.EMA_12: (moving_averages.add_ema, {"span": 12}),
-            Indicator.EMA_26: (moving_averages.add_ema, {"span": 26}),
-            Indicator.MACD: (momentum.add_macd, {}),  # Assume padrão 12, 26, 9
-            Indicator.RSI_14: (momentum.add_rsi, {"period": 14}),
-            Indicator.BB_20_2: (
-                volatility.add_bollinger_bands,
-                {"period": 20, "std_dev": 2},
-            ),
-        }
-
-        for indicator_enum in indicators_to_add:
-            if (
-                indicator_enum in processed_indicators
-                or indicator_enum not in indicator_map
-            ):
-                if indicator_enum not in indicator_map:
-                    logger.warning(
-                        f"Indicador {indicator_enum.name} não mapeado para função. Pulando."
-                    )
-                continue
-
-            func, kwargs = indicator_map[indicator_enum]
-            logger.debug(
-                f"Calculando {indicator_enum.name} com kwargs: {kwargs}")
+        # Para cada indicador solicitado
+        for indicator_config in indicators_to_add:
             try:
-                df_with_indicators = func(df_with_indicators, **kwargs)
-                processed_indicators.add(indicator_enum)
-                logger.debug(f"{indicator_enum.name} adicionado com sucesso.")
+                # Verificar o tipo de indicador e criar a instância apropriada
+                if indicator_config.type == Indicator.SMA:
+                    indicator_instance = medias_moveis.SMAIndicator(indicator_config)
+                elif indicator_config.type == Indicator.EMA:
+                    indicator_instance = medias_moveis.EMAIndicator(indicator_config)
+                elif indicator_config.type == Indicator.MACD:
+                    indicator_instance = medias_moveis.MACDIndicator(indicator_config)
+                elif indicator_config.type == Indicator.RSI:
+                    indicator_instance = momento.RSIIndicator(indicator_config)
+                elif indicator_config.type == Indicator.STOCH:
+                    indicator_instance = momento.StochasticOscillatorIndicator(indicator_config)
+                elif indicator_config.type == Indicator.BB:
+                    indicator_instance = volatilidade.BollingerBandsIndicator(indicator_config)
+                elif indicator_config.type == Indicator.ADX:
+                    indicator_instance = medias_moveis.ADXIndicator(indicator_config)
+                elif indicator_config.type == Indicator.ROC:
+                    indicator_instance = momento.ROCIndicator(indicator_config)
+                elif indicator_config.type == Indicator.ICHIMOKU:
+                    indicator_instance = tendencia.IchimokuCloudIndicator(indicator_config)
+                elif indicator_config.type == Indicator.CCI:
+                    indicator_instance = momento.CCIIndicator(indicator_config)
+                elif indicator_config.type == Indicator.DONCHIAN:
+                    indicator_instance = volatilidade.DonchianChannelIndicator(indicator_config)
+                elif indicator_config.type == Indicator.VWAP:
+                    indicator_instance = volume.VWAPIndicator(indicator_config)
+                elif indicator_config.type == Indicator.MFI:
+                    indicator_instance = volume.MFIIndicator(indicator_config)
+                elif indicator_config.type == Indicator.OBV:
+                    indicator_instance = volume.OBVIndicator(indicator_config)
+                elif indicator_config.type == Indicator.FIBONACCI or indicator_config.type == Indicator.FIBO:
+                    indicator_instance = niveis.FibonacciRetracementIndicator(indicator_config)
+                else:
+                    logger.warning(f"Indicador {indicator_config.type} não suportado. Pulando...")
+                    continue
 
-                # Marca dependências como processadas (ex: MACD calcula EMAs)
-                if indicator_enum == Indicator.MACD:
-                    if Indicator.EMA_12 in indicator_map:
-                        processed_indicators.add(Indicator.EMA_12)
-                    if Indicator.EMA_26 in indicator_map:
-                        processed_indicators.add(Indicator.EMA_26)
-                # Adicione outras dependências se necessário (ex: BB usa SMA)
-                if (
-                    indicator_enum == Indicator.BB_20_2
-                    and Indicator.SMA_20 in indicator_map
-                ):
-                    processed_indicators.add(Indicator.SMA_20)
+                # Calcula o indicador
+                indicator_df = indicator_instance.calculate(df)
 
-            except Exception as e_ind:
-                logger.error(
-                    f"Erro ao calcular indicador {indicator_enum.name}: {e_ind}"
-                )
-                # Continua para o próximo indicador
+                # Junta ao DataFrame resultado
+                if indicator_df is not None and not indicator_df.is_empty():
+                    result_df = result_df.join(indicator_df, on="date", how="left")
+                    logger.debug(f"Indicador {indicator_config.type} adicionado com sucesso.")
+                else:
+                    logger.warning(f"Indicador {indicator_config.type} retornou um DataFrame vazio ou None.")
+            except Exception as e:
+                logger.error(f"Erro ao adicionar indicador {indicator_config.type}: {e}")
+                # Continua com o próximo indicador
 
-        final_indicator_cols = [
-            col for col in df_with_indicators.columns if col not in df.columns
-        ]
-        logger.info(f"Indicadores adicionados: {final_indicator_cols}")
-        logger.info(f"Dimensões após indicadores: {df_with_indicators.shape}")
-        return df_with_indicators
+        # Verificar se algum indicador foi adicionado comparando as colunas
+        new_cols = set(result_df.columns) - set(df.columns)
+        if not new_cols:
+            logger.warning("Nenhuma coluna nova adicionada pelos indicadores técnicos.")
+        else:
+            logger.info(f"{len(new_cols)} colunas de indicadores adicionadas: {new_cols}")
+
+        return result_df
 
     def split_train_test(
         self, df: pl.DataFrame, train_ratio: float = 0.8, date_col: Optional[str] = None

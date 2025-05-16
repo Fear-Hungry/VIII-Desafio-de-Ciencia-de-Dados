@@ -96,10 +96,17 @@ class MFIIndicator(Indicator):
         mfi_final = pl.when(mfr == float("inf")).then(100.0).otherwise(mfi)
 
         # Montar resultado
+        if "date" not in data_with_sums.columns:
+            if "date" not in data.columns: # Checar no data original também
+                 raise ValueError("Coluna 'date' não encontrada no DataFrame de entrada.")
+            # Se 'date' está em 'data' mas não em 'data_with_sums', precisamos adicioná-la
+            # No entanto, 'data_with_sums' é construído a partir de 'data', então deve ter 'date'
+            # se 'data' tiver. A verificação mais segura é em 'data'.
+
         result_df = data_with_sums.select(
             [
-                data.columns[0],  # Preserva a primeira coluna (índice/data)
-                mfi_final.alias(f"MFI_{period}"),
+                pl.col("date"),  # Alterado para pl.col("date")
+                mfi_final.alias(f"MFI_{self.period}"), # Usar self.period
             ]
         )
 

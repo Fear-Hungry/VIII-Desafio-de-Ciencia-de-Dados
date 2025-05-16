@@ -1,3 +1,5 @@
+from typing import Optional, List, Union
+
 import polars as pl
 
 # --- Import relativo da classe base e config ---
@@ -8,56 +10,66 @@ from ..types import IndicatorConfig, IndicatorType
 
 
 class SMAIndicator(Indicator):
-    """Calcula a Média Móvel Simples (SMA).
+    """
+    Implementação do indicador SMA (Simple Moving Average/Média Móvel Simples).
 
-    A SMA representa o preço médio de um ativo durante um período específico.
-    É calculada somando os preços de fechamento recentes e dividindo pelo
-    número de períodos.
+    Este indicador calcula a média aritmética dos preços em um período especificado,
+    dando igual peso a cada ponto de dados.
+
+    Exemplos:
+        >>> # Criar um indicador SMA de 20 períodos
+        >>> sma = SMAIndicator(IndicatorConfig(type=IndicatorType.SMA, params=[20]))
+        >>> # ou diretamente com o período
+        >>> sma = SMAIndicator(20)
+        >>> # Calcular o indicador para um DataFrame
+        >>> df_com_sma = sma.calculate(df)
     """
 
-    def __init__(self, config: IndicatorConfig):
-        """Inicializa o indicador SMA com sua configuração."""
-        if config.type != IndicatorType.SMA:
-            raise ValueError(
-                f"Configuração inválida para SMAIndicator. Tipo esperado: SMA, recebido: {config.type}"
-            )
-        super().__init__(config)
-        self.period = int(self.config.params[0])
-        self.price_column = "close"  # Assume 'close' por padrão
-
-    def calculate(self, data: pl.DataFrame) -> pl.DataFrame:
+    def __init__(self, config: Union[IndicatorConfig, int]):
         """
-        Calcula a SMA usando Polars.
+        Inicializa o indicador SMA.
 
         Args:
-            data: DataFrame Polars com pelo menos a coluna de preço (padrão: 'Close').
-                  Deve estar ordenado por data.
-
-        Returns:
-            DataFrame Polars com a coluna 'sma_{period}'.
+            config: Configuração do indicador (IndicatorConfig) ou diretamente
+                   o período como inteiro.
         """
-
-        if self.price_column not in data.columns:
-            raise ValueError(
-                f"DataFrame de entrada precisa conter a coluna: '{self.price_column}'"
-            )
-
-        output_col_name = self.column_name  # Ex: sma_20
-
-        # Calcula a SMA usando rolling_mean
-        # min_periods garante NaNs no início
-        sma_series = data.select(
-            pl.col(self.price_column)
-            .rolling_mean(window_size=self.period, min_periods=self.period)
-            .alias(output_col_name)
-        )
-
-        # Combina com a coluna de índice/tempo original
-        if data.columns:
-            result_df = pl.concat(
-                [data.select(data.columns[0]), sma_series], how="horizontal"
+        if isinstance(config, int):
+            # Se for só um número, assume que é o período
+            self.period = config
+            # Cria uma configuração padrão com o período fornecido
+            self.config = IndicatorConfig(
+                type=IndicatorType.SMA,
+                params=[self.period]
             )
         else:
-            result_df = sma_series
+            # Assume que é um IndicatorConfig
+            self.config = config
+            self.period = self.config.params[0] if self.config.params else 20
 
-        return result_df
+        # Nome para a coluna de saída
+        self.output_column = f"sma_{self.period}"
+
+    def calculate(self, df: pl.DataFrame) -> pl.DataFrame:
+        """
+        Calcula o indicador SMA para o DataFrame fornecido.
+
+        Args:
+            df: DataFrame com dados OHLCV.
+
+        Returns:
+            DataFrame com a coluna do indicador SMA adicionada.
+        """
+        if "close" not in df.columns:
+            raise ValueError("A coluna 'close' é necessária para calcular o SMA")
+
+        # Calcula SMA com rolling window e nomeia a coluna diretamente na expressão
+        sma_expr = pl.col("close").rolling_mean(window_size=self.period).alias(self.output_column)
+
+        # Avalia a expressão no contexto do DataFrame e seleciona as colunas necessárias
+        df_with_sma = df.with_columns(sma_expr)
+
+        # Retorna um novo DataFrame contendo apenas o timestamp e o SMA
+        return df_with_sma.select(["date", self.output_column])
+
+    def __str__(self) -> str:
+        return f"SMA({self.period})"
