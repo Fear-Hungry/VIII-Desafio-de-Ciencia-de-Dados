@@ -3,40 +3,118 @@ import numpy as np # Adicionado para np.nan
 from backtesting import Backtest, Strategy
 from backtesting.lib import crossover
 
-# Certifique-se de que seu arquivo CSV tenha colunas como:
-# Date,Open,High,Low,Close,Volume
-# A coluna 'Date' será o índice.
+# O script tentará encontrar um arquivo data/dados.csv
+# e processar suas colunas de forma flexível.
 CSV_FILE_PATH = 'data/dados.csv'
-PARQUET_FILE_PATH = 'data/dados.parquet'
+# O nome do arquivo Parquet agora refletirá o nome do CSV original para clareza
+PARQUET_FILE_PATH = CSV_FILE_PATH.replace('.csv', '.parquet')
 
-# Carregar dados do CSV
+# Carregar dados do CSV com tratamento flexível de colunas
 try:
-    df = pd.read_csv(CSV_FILE_PATH, parse_dates=['Date'], index_col='Date')
+    df = pd.read_csv(CSV_FILE_PATH)
+
+    # Normaliza todos os nomes para lowercase e remove espaços extras
+    df.columns = df.columns.str.strip().str.lower()
+
+    col_mapping = {}
+    # Colunas esperadas (chave: nome padronizado backtesting.py; valor: lista de sinônimos em lowercase)
+    expected_cols_data = {
+        'Open':     ['open', 'abertura', 'preco_abertura'],
+        'High':     ['high', 'maximo', 'preco_maximo', 'alta'],
+        'Low':      ['low', 'minimo', 'preco_minimo', 'baixa'],
+        'Close':    ['close', 'fechamento', 'preco_fechamento', 'ultimo'],
+        'Volume':   ['volume', 'vol', 'quantidade', 'quant', 'vendas', 'negocios'] # Volume é opcional
+    }
+
+    found_cols = {}
+    for std_name, variants in expected_cols_data.items():
+        for v_lower in variants:
+            if v_lower in df.columns:
+                # Mapeia o nome original encontrado (já em lowercase) para o nome padrão Capitalizado
+                col_mapping[v_lower] = std_name
+                found_cols[std_name] = v_lower # Guarda qual variante foi encontrada
+                break
+        else:
+            if std_name != 'Volume': # Volume é opcional
+                raise ValueError(f"Coluna obrigatória '{std_name}' (ou sinônimos: {variants}) não encontrada no CSV.")
+
+    # Detecta coluna de data automática (date, datetime, timestamp…)
+    date_variants_lower = ['date', 'datetime', 'timestamp', 'time', 'data', 'hora']
+    date_col_found_lower = next((c for c in df.columns if c in date_variants_lower), None)
+
+    if date_col_found_lower is None:
+        raise ValueError(f"Nenhuma coluna de data/hora (ex: {date_variants_lower}) encontrada no CSV.")
+    else:
+        # Converte e seta como índice
+        df[date_col_found_lower] = pd.to_datetime(df[date_col_found_lower])
+        df.set_index(date_col_found_lower, inplace=True)
+        if date_col_found_lower in col_mapping: # Se a coluna de data também era uma das colunas de dados (improvável mas possível)
+            del col_mapping[date_col_found_lower]
+
+    # Renomeia as colunas de dados para o padrão do backtesting.py (Open, High, Low, Close, Volume)
+    df.rename(columns=col_mapping, inplace=True)
+
+    # Seleciona apenas as colunas que foram mapeadas para o padrão + o índice
+    # Isso remove colunas extras que não são de data nem OHLCV
+    final_columns = [col for col in ['Open', 'High', 'Low', 'Close', 'Volume'] if col in df.columns]
+    df = df[final_columns]
 
     # Garantir que os dados estão ordenados pelo índice (data)
     df.sort_index(inplace=True)
 
-    required_columns = {'Open', 'High', 'Low', 'Close'}
-    missing_columns = required_columns - set(df.columns)
-    if missing_columns:
-        raise ValueError(f"Colunas obrigatórias faltando no CSV: {missing_columns}. Por favor, ajuste o arquivo ou os nomes das colunas.")
+    # Tratar valores ausentes (NaN) nas colunas OHLCV
+    # Primeiro, identificar as colunas OHLCV que realmente existem no DataFrame
+    ohlcv_cols_to_fill = [col for col in ['Open', 'High', 'Low', 'Close', 'Volume'] if col in df.columns]
+    if ohlcv_cols_to_fill:
+        df[ohlcv_cols_to_fill] = df[ohlcv_cols_to_fill].fillna(method='ffill').fillna(method='bfill')
+        # Se ainda restarem NaNs (ex: arquivo só com NaNs), podemos optar por remover ou alertar.
+        # Por simplicidade, vamos verificar e remover linhas que ainda possam ter NaN nas colunas obrigatórias.
+        # Colunas obrigatórias para o backtest após o preenchimento
+        cols_obrigatorias_check_nan = ['Open', 'High', 'Low', 'Close']
+        df.dropna(subset=[col for col in cols_obrigatorias_check_nan if col in df.columns], inplace=True)
 
-    if 'Volume' not in df.columns:
-        print("Aviso: A coluna 'Volume' não foi encontrada. Algumas estratégias podem precisar dela, mas RsiHeuristic continuará.")
+    # Verificar se as colunas obrigatórias agora existem com o nome padrão
+    required_after_rename = {'Open', 'High', 'Low', 'Close'}
+    missing_after_rename = required_after_rename - set(df.columns)
+    if missing_after_rename:
+         # Este erro não deveria ocorrer se a lógica anterior funcionou
+        raise ValueError(f"Erro interno: Colunas obrigatórias {missing_after_rename} não encontradas após o mapeamento.")
+
+    # Validar e converter tipos de dados para colunas OHLCV
+    for col_name in final_columns: # final_columns já contém 'Open', 'High', 'Low', 'Close' e 'Volume' se existirem
+        if col_name in df.columns: # Checagem extra de segurança
+            # Tentar converter para numérico, erros viram NaN (que já foram tratados, mas pode pegar outros formatos não numéricos)
+            df[col_name] = pd.to_numeric(df[col_name], errors='coerce')
+            if df[col_name].isnull().any():
+                # Se a conversão introduziu NaNs, isso indica dados não numéricos.
+                # Poderíamos remover essas linhas ou lançar um erro. Por ora, vamos remover.
+                print(f"Aviso: A coluna '{col_name}' continha valores não numéricos que foram convertidos para NaN e as linhas correspondentes removidas.")
+                df.dropna(subset=[col_name], inplace=True)
+
+            if not pd.api.types.is_numeric_dtype(df[col_name]):
+                raise ValueError(f"A coluna '{col_name}' não pôde ser convertida para um tipo numérico e é essencial para o backtest.")
+
+    if 'Volume' not in df.columns and 'Volume' in found_cols:
+         print("Aviso: A coluna 'Volume' foi encontrada mas não mapeada corretamente. Verifique a lógica de mapeamento.")
+    elif 'Volume' not in df.columns:
+        print("Aviso: Nenhuma coluna de 'Volume' (ou sinônimos) foi encontrada ou mapeada. A estratégia RsiHeuristic continuará.")
 
     # Salvar como Parquet para uso futuro ou se preferir trabalhar com Parquet
     df.to_parquet(PARQUET_FILE_PATH)
-    print(f"Dados carregados de {CSV_FILE_PATH}, ordenados e salvos em formato Parquet: {PARQUET_FILE_PATH}")
+    print(f"\nDados carregados de {CSV_FILE_PATH}, processados, colunas renomeadas para o padrão e salvos em {PARQUET_FILE_PATH}")
+    print(f"Colunas detectadas e mapeadas: {found_cols}")
+    print(f"Coluna de data/hora usada como índice: {date_col_found_lower}")
+    print(f"Colunas finais no DataFrame para backtesting: {list(df.columns)}")
+    print(f"Índice do DataFrame: {df.index.name}, Tipo: {df.index.dtype}\n")
 
 except FileNotFoundError:
     print(f"Erro: O arquivo {CSV_FILE_PATH} não foi encontrado. Certifique-se de que ele exista no diretório 'data/'.")
-    print("Por favor, crie um arquivo 'data/dados.csv' com seus dados de entrada (colunas: Date,Open,High,Low,Close,Volume)." )
     exit()
 except ValueError as ve:
     print(f"Erro de valor ao processar o CSV: {ve}")
     exit()
 except Exception as e:
-    print(f"Ocorreu um erro ao carregar ou processar o arquivo CSV: {e}")
+    print(f"Ocorreu um erro inesperado ao carregar ou processar o arquivo CSV: {e}")
     exit()
 
 class RsiHeuristic(Strategy):
@@ -84,6 +162,12 @@ class RsiHeuristic(Strategy):
 
 # 2. Instancie e execute:
 if 'df' in locals() and not df.empty: # Verifica se o DataFrame foi carregado
+    # Verificar se há dados suficientes para o backtest
+    min_data_points = RsiHeuristic.n_rsi + 10 # Um pouco mais que o período do RSI, por exemplo
+    if len(df) < min_data_points:
+        print(f"Erro: Dados insuficientes para executar o backtest. São necessários pelo menos {min_data_points} pontos de dados, mas foram encontrados {len(df)}.")
+        exit()
+
     bt = Backtest(
         df,                     # DataFrame com os dados carregados
         RsiHeuristic,
