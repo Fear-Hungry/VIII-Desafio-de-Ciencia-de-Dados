@@ -194,29 +194,49 @@ cd VIII-Desafio-de-Ciencia-de-Dados
 ```bash
 pip install -r requirements.txt
 ```
-Isso irá instalar bibliotecas como **yfinance**, **yahoofinancials**, **openbb**, **polars**, entre outras. Caso esteja usando um ambiente como Google Colab, você pode, alternativamente, instalar pacote por pacote conforme listado. *Observação:* Bibliotecas de Machine Learning (TensorFlow/Keras) já estão disponíveis por padrão em muitos ambientes; se necessário, instale o TensorFlow manualmente (`pip install tensorflow`) para garantir que o Keras esteja disponível.
+Isso irá instalar bibliotecas como **yfinance**, **yahoofinancials**, **openbb**, **polars**, **numpy**, **pandas**, **backtesting.py**, entre outras. Caso esteja usando um ambiente como Google Colab, você pode, alternativamente, instalar pacote por pacote conforme listado. *Observação:* Bibliotecas de Machine Learning (TensorFlow/Keras) já estão disponíveis por padrão em muitos ambientes; se necessário, instale o TensorFlow manualmente (`pip install tensorflow`) para garantir que o Keras esteja disponível.
 
-**3. Estrutura de pastas do projeto:**
+**3. Estrutura de pastas do projeto e Preparação dos Dados para `main.py`:**
 
-*   A raiz do repositório contém os arquivos principais do código e documentação. Em especial, o arquivo **`main.py`** é o script principal que coordena o pipeline completo (carregamento de dados, aplicação da estratégia de indicadores e execução do backtest). Há também um `teste.py` (usado para pequenos testes de conexão com APIs).
-*   A pasta **`data/`** (pode ser necessário criá-la) é onde devem residir os arquivos de dados históricos. Durante o desenvolvimento, os dados coletados (por ex., `AAPL.parquet`) foram gravados ali. Para reproduzir o backtest, você deve colocar o dataset de teste escondido (fornecido separadamente, contendo preços de 01/01/2025 a 31/03/2025) nessa pasta – por exemplo, um arquivo Parquet ou CSV com os preços do ativo alvo nesse intervalo. Certifique-se de nomear o arquivo conforme esperado pelo script (provavelmente seguindo o padrão do símbolo do ativo, e.g., `AAPL.parquet` se for o ativo Apple).
+*   A raiz do repositório contém os arquivos principais do código e documentação. Em especial, o arquivo **`main.py`** é o script principal que você usará para rodar o backtest com a estratégia de RSI. Há também um `teste.py` (usado para pequenos testes de conexão com APIs).
+*   A pasta **`data/`** (pode ser necessário criá-la manualmente: `mkdir data`): É aqui que o `main.py` espera encontrar seus dados de entrada e onde ele salvará a versão processada em Parquet.
+    *   **Arquivo de Entrada**: Para executar o `main.py`, crie um arquivo chamado `dados.csv` dentro da pasta `data/`.
+    *   **Formato do `dados.csv`**:
+        *   A primeira linha deve ser o cabeçalho.
+        *   É crucial que exista uma coluna de data/hora chamada `Date`. O script `main.py` usará esta coluna para parsear as datas e como índice do DataFrame.
+        *   Colunas obrigatórias para a cotação: `Open`, `High`, `Low`, `Close`.
+        *   Coluna opcional: `Volume`. Se não estiver presente, um aviso será exibido, mas a estratégia `RsiHeuristic` (que usa apenas `Close`) funcionará.
+        *   Exemplo de estrutura das primeiras linhas de `dados.csv`:
+            ```csv
+            Date,Open,High,Low,Close,Volume
+            2023-01-01 09:00:00,150.0,151.0,149.5,150.5,10000
+            2023-01-01 09:05:00,150.5,150.8,150.2,150.7,12000
+            ...
+            ```
+    *   **Processamento pelo Script**: Ao executar `main.py`, ele lerá `data/dados.csv`, verificará as colunas, ordenará os dados pela coluna `Date` e, em seguida, salvará os dados processados como `data/dados.parquet`. Em execuções futuras (se o `main.py` fosse modificado para ler Parquet diretamente, o que não é o caso atualmente), este arquivo Parquet poderia ser usado para um carregamento mais rápido.
 *   A pasta **`scripts/`** contém notebooks utilizados para coleta e preparação de dados (parte do pipeline de dados). Por exemplo, há notebooks para obter séries temporais em frequências diferentes (`TimeSeries_Monthly_APPLE.ipynb`, `TimeStamp_5_in_5_minutos_APPLE.ipynb`, etc.) que demonstram como os dados brutos foram adquiridos e processados.
 *   A pasta **`features/`** armazena notebooks e, possivelmente, dados relacionados à engenharia de features (cálculo de indicadores técnicos em diferentes frequências, normalizações, etc., também parte do pipeline de dados). Os notebooks ali, como `TimeSeries_Daily_APPLE.ipynb`, mostram o cálculo de indicadores diários, semanais e mensais, que depois foram integrados ao dataset intradiário.
 *   Arquivos de **documentação (.md)**: na raiz, há diversos arquivos Markdown que detalham partes do projeto e pesquisas realizadas. Por exemplo, `Engenharia de Features.md` descreve quais features foram criadas, `RL em Trading.md` discute conceitos de Reinforcement Learning aplicados a trading (e as dificuldades encontradas), e outros documentos podem detalhar a exploração de modelos como LSTM. Esses documentos servem como referência teórica e justificativa das escolhas implementadas.
 *   O arquivo **`requirements.txt`** lista as dependências do projeto, conforme mencionado.
 
-**4. Executando o backtest (dados conhecidos):** Caso queira verificar o funcionamento com dados históricos conhecidos (por exemplo, até 2024), você pode executar o script principal apontando para um dataset de teste customizado. Certifique-se de que o arquivo de dados apropriado esteja em `data/`. Então, rode:
+**4. Executando o Script Principal (`main.py`):**
+
+Após preparar o arquivo `data/dados.csv` conforme descrito no item 3, você pode executar o backtest da estratégia `RsiHeuristic`. Abra seu terminal, navegue até a raiz do projeto e execute:
 ```bash
 python main.py
 ```
-O script irá carregar os dados, preparar features, aplicar a estratégia de trading baseada em indicadores e, então, simular as operações no período definido dentro do código. Ao término, observará no console uma saída resumida com métricas (por exemplo, lucro total, retorno percentual, Sharpe Ratio, etc.) e, possivelmente, o script gerará arquivos de log/resultado (como um CSV dos trades realizados ou um gráfico de desempenho salvo em PNG).
+O script realizará as seguintes ações:
+1.  Carregará os dados de `data/dados.csv`.
+2.  Verificará a presença das colunas `Open`, `High`, `Low`, `Close` (e `Volume`, opcionalmente).
+3.  Converterá a coluna `Date` para datetime e a definirá como índice.
+4.  Ordenará os dados cronologicamente.
+5.  Salvará o DataFrame processado em `data/dados.parquet`.
+6.  Inicializará e executará o backtest usando a `RsiHeuristic` com os parâmetros padrão (RSI(14), compra < 30, venda > 70), capital inicial de 10.000 e comissão de 0.2%.
+7.  Imprimirá as estatísticas detalhadas de desempenho do backtest no console (incluindo Retorno, Drawdown, Sharpe Ratio, etc.).
+8.  Gerará e exibirá um gráfico interativo mostrando a evolução do patrimônio, os pontos de compra/venda e o indicador RSI.
 
-**5. Executando o teste final com o *hidden dataset*:** Para reproduzir exatamente a avaliação final feita pela banca, utilize o dataset oculto de jan-mar 2025. Coloque-o na pasta `data/` conforme instruído (mesmo formato e nome esperado). Em seguida, rode novamente:
-```bash
-python main.py
-```
-O script detectará automaticamente os dados desse período e executará o backtest final. Os resultados obtidos deverão coincidir com os apresentados no relatório (pequenas diferenças podem ocorrer devido à aleatoriedade – embora tenhamos fixado as seeds, certifique-se de executar no mesmo ambiente de software para evitar discrepâncias). Agora você pode analisar a saída e comparar com o benchmark ou outros parâmetros.
+Se o arquivo `data/dados.csv` não for encontrado, ou se as colunas obrigatórias estiverem ausentes, o script exibirá uma mensagem de erro e será encerrado.
 
-**6. Dicas adicionais:** Para inspecionar ou modificar parâmetros, abra o arquivo `main.py` em um editor de texto. O código é comentado para facilitar o entendimento. Por exemplo, você pode ajustar valores como capital inicial, taxas de transação, limiares de decisão da estratégia de indicadores, ou ativar modos de depuração que possam estar implementados (como impressão de cada trade). Se desejar recomputar features (executar o pipeline de dados), consulte os notebooks em `scripts/` e `features/` – eles contêm o passo a passo da coleta de dados e podem ser executados sequencialmente (por exemplo, em um ambiente Jupyter) para recriar todo o processo antes do backtest. Lembre-se de inserir suas chaves de API nos locais apropriados (o projeto usa variáveis de ambiente para chaves da Alpha Vantage; veja o uso de `dotenv` nos notebooks).
+**5. Dicas adicionais:** Para inspecionar ou modificar parâmetros da estratégia (como os períodos do RSI ou os níveis de compra/venda), você pode editar diretamente o arquivo `main.py` na classe `RsiHeuristic`. Lembre-se de que, para desafios ou avaliações específicas que forneçam um *hidden dataset*, você deve renomear ou copiar esse dataset para `data/dados.csv`, garantindo que ele siga o formato de colunas esperado, antes de executar `python main.py`. Se desejar recomputar features ou realizar outras manipulações de dados mais complexas, consulte os notebooks em `scripts/` e `features/` – eles contêm o passo a passo da coleta de dados e podem ser executados sequencialmente (por exemplo, em um ambiente Jupyter) para recriar todo o processo antes do backtest. Lembre-se de inserir suas chaves de API nos locais apropriados (o projeto usa variáveis de ambiente para chaves da Alpha Vantage; veja o uso de `dotenv` nos notebooks).
 
 Seguindo esse guia, qualquer usuário poderá reproduzir o ambiente experimental e verificar os resultados obtidos, bem como ajustar a metodologia para novos testes. Boa reprodução e bons trades!
