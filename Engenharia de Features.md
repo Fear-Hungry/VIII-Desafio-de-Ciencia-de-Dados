@@ -17,9 +17,9 @@
     - [x] Criação de novas features
     - [x] Extração de features
     - [x] Seleção de features
-- [] Materialização & logging
-- [] Preparação final para modelagem
-    - [] Exportar feature store em formato compatível com o ambiente de treinamento de RL
+- [x] Materialização & logging
+- [x] Preparação final para modelagem
+    - [x] Exportar feature store em formato compatível com o ambiente de treinamento de RL
 
 ### Recomendações
 - Utilizar o formato Parquet para armazenamento dos dados, pois é mais otimizado que CSV, e a quantidade de dados é grande (muitooo grande!!).
