@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relatório Interativo - VIII Desafio de Ciência de Dados</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Visualization & Content Choices:
+        - Visão Geral: Text summary. Goal: Orient user. Method: HTML text. Interaction: None. Justification: Standard intro.
+        - Dados: Text summaries, bullet points. Goal: Detail data sources, prep, features. Method: HTML text, collapsible sections for indicator categories. Interaction: Click to expand/collapse. Justification: Manage information density.
+        - Metodologia: Text summaries. Goal: Explain architecture, choices. Method: HTML text. Interaction: None. Justification: Direct explanation.
+        - Setup Backtesting: Text summary. Goal: Explain test environment. Method: HTML text. Interaction: None. Justification: Context for results.
+        - Resultados:
+            - Comparação Estratégia Indicadores vs. DRL:
+                - Chart 1 (Indicadores RSI-14): Line chart (Equity). Goal: Show RSI-14 performance. Method: Chart.js. Interaction: Hover for tooltips. Data: Illustrative based on +7.14% return, -9.5% DD, Sharpe 1.145 (Maio-Ago 2020). Justification: Visual representation of key result.
+                - Chart 2 (DRL Drawdown): Line chart (Drawdown). Goal: Show DRL risk. Method: Chart.js. Interaction: Hover for tooltips. Data: Illustrative based on -39.05% DD (Ago 2020). Justification: Visual representation of DRL challenge.
+                - Chart 3 (DRL Reward): Line chart (Accumulated Reward). Goal: Show DRL reward progression. Method: Chart.js. Interaction: Hover for tooltips. Data: Illustrative based on image provided (final ~0.116, peak ~0.14). Justification: Complement DRL performance view.
+                - Metrics Text (DRL): Detailed textual summary of DRL specific backtest metrics. Goal: Provide granular DRL performance. Method: HTML. Interaction: None. Justification: Detailed insight.
+                - Metrics Table (General Comparison): HTML table. Goal: Compare key metrics across strategies. Method: HTML. Interaction: None. Justification: Quick comparison.
+                - Tabs/Buttons: To switch views. Goal: Organize comparison. Method: JS click handlers. Interaction: Click. Justification: Space efficiency.
+        - Planos Futuros: Text summary, bullet points. Goal: Outline DRL improvements including GA for feature optimization. Method: HTML text. Interaction: None. Justification: Concluding thoughts, future work.
+        - CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #F5F5F5; color: #333333; }
+        .content-section { display: none; }
+        .content-section.active { display: block; }
+        .nav-link { transition: all 0.3s ease; }
+        .nav-link.active, .nav-link:hover { background-color: #48D1CC; color: white; }
+        .chart-container { position: relative; width: 100%; max-width: 600px; margin-left: auto; margin-right: auto; height: 300px; max-height: 350px; background-color: #FFFFFF; padding: 1rem; border-radius: 0.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        @media (min-width: 768px) { .chart-container { height: 350px; max-height: 400px;} }
+        .tab-button.active { background-color: #48D1CC; color: white; }
+        h2 { color: #5F9EA0; }
+        h3 { color: #778899; }
+        h4.section-subtitle { color: #6a7b8a; margin-top: 1rem; margin-bottom: 0.5rem; font-weight: 600; }
+        .card { background-color: #FFFFFF; border-radius: 0.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.05); padding: 1.5rem; margin-bottom: 1.5rem;}
+        .tooltip { position: relative; display: inline-block; cursor: pointer; }
+        .tooltip .tooltiptext { visibility: hidden; width: 220px; background-color: #555; color: #fff; text-align: center; border-radius: 6px; padding: 5px 0; position: absolute; z-index: 1; bottom: 125%; left: 50%; margin-left: -110px; opacity: 0; transition: opacity 0.3s; font-size: 0.875rem; }
+        .tooltip:hover .tooltiptext { visibility: visible; opacity: 1; }
+        .list-disc { list-style-type: disc; }
+        .list-circle { list-style-type: circle; }
+        .list-inside { list-style-position: inside; }
+        .metric-item { display: flex; justify-content: space-between; padding-bottom: 0.25rem; margin-bottom: 0.25rem; border-bottom: 1px solid #eee;}
+        .metric-item span:first-child { font-weight: 500; color: #555;}
+        .metric-item span:last-child { color: #333;}
+    </style>
+</head>
+<body class="flex flex-col md:flex-row min-h-screen">
+
+    <aside class="w-full md:w-64 bg-[#778899] text-white p-4 space-y-2 md:sticky md:top-0 md:h-screen">
+        <h1 class="text-xl font-bold mb-6 text-center">Relatório Interativo</h1>
+        <nav>
+            <a href="#visao-geral" class="nav-link block py-2 px-3 rounded active">Visão Geral</a>
+            <a href="#dados" class="nav-link block py-2 px-3 rounded">Dados</a>
+            <a href="#metodologia" class="nav-link block py-2 px-3 rounded">Metodologia</a>
+            <a href="#backtesting" class="nav-link block py-2 px-3 rounded">Setup de Backtesting</a>
+            <a href="#resultados" class="nav-link block py-2 px-3 rounded">Resultados</a>
+            <a href="#planos-futuro" class="nav-link block py-2 px-3 rounded">Planos para o Futuro</a>
+        </nav>
+    </aside>
+
+    <main class="flex-1 p-6 md:p-10 overflow-y-auto">
+
+        <section id="visao-geral" class="content-section active card">
+            <h2 class="text-2xl font-semibold mb-4">Visão Geral do Projeto</h2>
+            <p class="mb-3">Esta aplicação apresenta de forma interativa o Relatório Técnico do VIII Desafio de Ciência de Dados. O projeto focou no desenvolvimento e avaliação de uma estratégia de trading automatizada para ativos financeiros, utilizando dados históricos e técnicas de ciência de dados.</p>
+            <div class="grid md:grid-cols-2 gap-4">
+                <div>
+                    <h3 class="text-xl font-medium mb-2">Problema Abordado</h3>
+                    <p>Desenvolver uma estratégia de negociação (trading) baseada em dados históricos de ativos financeiros e avaliar sua eficácia através de backtesting rigoroso.</p>
+                </div>
+                <div>
+                    <h3 class="text-xl font-medium mb-2">Importância</h3>
+                    <p>Explorar como a análise de dados e o aprendizado de máquina podem auxiliar na tomada de decisões em mercados financeiros, buscando otimizar retornos e gerenciar riscos.</p>
+                </div>
+            </div>
+            <h3 class="text-xl font-medium mt-4 mb-2">Escopo e Objetivos Específicos</h3>
+            <ul class="list-disc list-inside space-y-1">
+                <li>Coleta e tratamento de dados históricos de cotações (Yahoo Finance, Alpha Vantage).</li>
+                <li>Engenharia de features, com foco em indicadores técnicos.</li>
+                <li>Exploração de modelos de Machine Learning (LSTM, DRL) e estratégias baseadas em indicadores.</li>
+                <li>Implementação de um ambiente de backtesting.</li>
+                <li>Análise comparativa de resultados com benchmarks (Buy & Hold).</li>
+                <li>Avaliar o desempenho da estratégia final em dados não vistos.</li>
+            </ul>
+        </section>
+
+        <section id="dados" class="content-section card">
+            <h2 class="text-2xl font-semibold mb-4">Dados: Coleta, Preparação e Features</h2>
+            <p class="mb-3">A fundação de qualquer estratégia de trading algorítmico reside na qualidade e no tratamento dos dados. Esta seção detalha as fontes, o processo de limpeza e transformação, e a crucial etapa de engenharia de features.</p>
+
+            <div id="dados-accordion">
+                <div class="mb-2">
+                    <button class="accordion-toggle w-full text-left p-3 bg-gray-100 hover:bg-gray-200 rounded font-medium" data-target="dados-descricao">Descrição dos Dados</button>
+                    <div id="dados-descricao" class="accordion-content hidden p-3 border rounded-b">
+                        <h3 class="text-lg font-medium mb-2">Fontes e Tipos</h3>
+                        <ul class="list-disc list-inside space-y-1 mb-2">
+                            <li><strong class="font-semibold">APIs:</strong> Yahoo Finance (via `yfinance`, `yahoofinancials`), Alpha Vantage.</li>
+                            <li><strong class="font-semibold">Ferramentas:</strong> OpenBB SDK para acesso unificado.</li>
+                            <li><strong class="font-semibold">Tipos:</strong> Séries históricas de preços (ações), cotações diárias e intradiárias (intervalos de 5 min).</li>
+                            <li><strong class="font-semibold">Armazenamento:</strong> Formato Parquet (principal, para eficiência), CSV (auxiliar).</li>
+                        </ul>
+                        <h3 class="text-lg font-medium mb-2">Limitações Conhecidas</h3>
+                        <ul class="list-disc list-inside space-y-1">
+                            <li>Dependência da qualidade e disponibilidade de dados de APIs públicas.</li>
+                            <li>Complexidade no alinhamento de dados de diferentes frequências.</li>
+                            <li>Análise de Texto (NLP) para sentimento de notícias foi considerada fora do escopo.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="mb-2">
+                    <button class="accordion-toggle w-full text-left p-3 bg-gray-100 hover:bg-gray-200 rounded font-medium" data-target="dados-preparacao">Preparação dos Dados</button>
+                    <div id="dados-preparacao" class="accordion-content hidden p-3 border rounded-b">
+                        <h3 class="text-lg font-medium mb-2">Pipeline com Polars</h3>
+                        <ul class="list-disc list-inside space-y-1">
+                            <li>Leitura eficiente de Parquet (`scan_parquet` para <em class="italic">lazy loading</em>).</li>
+                            <li>Ordenação temporal dos dados.</li>
+                            <li><strong class="font-semibold">Limpeza:</strong> Filtragens temporais, tratamento de valores ausentes (remoção de dias sem pregão, forward fill).</li>
+                            <li><strong class="font-semibold">Transformação:</strong> Cálculo de retornos percentuais, transformações logarítmicas em preços, reamostragem para 5 minutos.</li>
+                            <li><strong class="font-semibold">Normalização/Padronização:</strong> Features e preços ajustados para comparabilidade.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="mb-2">
+                    <button class="accordion-toggle w-full text-left p-3 bg-gray-100 hover:bg-gray-200 rounded font-medium" data-target="dados-features">Engenharia de Features (Indicadores Técnicos)</button>
+                    <div id="dados-features" class="accordion-content hidden p-3 border rounded-b">
+                        <p class="mb-2">Um módulo dedicado (`indicators`) foi desenvolvido para calcular uma ampla gama de indicadores técnicos, compatível com DataFrames Polars para alta performance.</p>
+                        <h4 class="font-medium">Categorias de Indicadores Implementados:</h4>
+                        <ul class="list-disc list-inside space-y-1 mt-1">
+                            <li><strong class="font-semibold">Médias Móveis:</strong> SMA, EMA, MACD.</li>
+                            <li><strong class="font-semibold">Momento:</strong> RSI, Estocástico, ROC, CCI.</li>
+                            <li><strong class="font-semibold">Volatilidade:</strong> Bandas de Bollinger, ATR, Donchian Channels.</li>
+                            <li><strong class="font-semibold">Volume:</strong> OBV, MFI, VWAP.</li>
+                            <li><strong class="font-semibold">Níveis:</strong> Retrações de Fibonacci.</li>
+                            <li><strong class="font-semibold">Tendência:</strong> Nuvem de Ichimoku, SAR Parabólico.</li>
+                        </ul>
+                        <p class="mt-2">O resultado é um DataFrame consolidado, limpo e enriquecido com indicadores, pronto para a modelagem.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="metodologia" class="content-section card">
+            <h2 class="text-2xl font-semibold mb-4">Metodologia e Implementação</h2>
+            <p class="mb-3">A solução foi implementada seguindo uma arquitetura modular, desde a coleta de dados até a tomada de decisão de trading. Esta seção detalha a arquitetura do sistema, as abordagens de modelagem exploradas e as justificativas para as escolhas metodológicas.</p>
+
+            <div id="metodologia-accordion">
+                <div class="mb-2">
+                    <button class="accordion-toggle w-full text-left p-3 bg-gray-100 hover:bg-gray-200 rounded font-medium" data-target="metodologia-arquitetura">Arquitetura Modular do Sistema</button>
+                    <div id="metodologia-arquitetura" class="accordion-content hidden p-3 border rounded-b">
+                        <ul class="list-disc list-inside space-y-1">
+                            <li><strong class="font-semibold">Coleta de Dados:</strong> Scripts para baixar dados históricos (Yahoo, Alpha Vantage, OpenBB).</li>
+                            <li><strong class="font-semibold">Pré-processamento (Pipeline de Dados):</strong> Limpeza, transformação, engenharia de features (indicadores).</li>
+                            <li><strong class="font-semibold">Modelagem (Pipeline de Modelagem):</strong> Exploração de LSTM, DRL, e foco final em estratégia de indicadores.</li>
+                            <li><strong class="font-semibold">Decisão (Estratégia de Trading):</strong> Baseada em sinais de indicadores técnicos, com stop loss/take profit.</li>
+                            <li><strong class="font-semibold">Interface:</strong> Scripts, relatórios e gráficos (Jupyter notebooks, `main.py`).</li>
+                            <li><strong class="font-semibold">Módulo `data_loader`:</strong> Para aquisição e manejo inicial de dados.</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="mb-2">
+                    <button class="accordion-toggle w-full text-left p-3 bg-gray-100 hover:bg-gray-200 rounded font-medium" data-target="metodologia-escopo">Escopo da Modelagem e Justificativas</button>
+                    <div id="metodologia-escopo" class="accordion-content hidden p-3 border rounded-b">
+                        <h4 class="font-medium">Foco em Indicadores Técnicos:</h4>
+                        <p class="mb-1">A decisão de focar em uma estratégia puramente baseada em indicadores técnicos foi tomada após exploração de modelos mais complexos.</p>
+                        <h4 class="font-medium mt-2">Abordagens Não Priorizadas:</h4>
+                        <ul class="list-disc list-inside space-y-1">
+                            <li><strong class="font-semibold">Análise de Texto (NLP):</strong> Considerada fora do escopo principal devido à complexidade de implementação, desenvolvimento de modelos específicos e desafios de inferência causal.</li>
+                            <li><strong class="font-semibold">Modelos LSTM e DRL:</strong> Não adotados como solução principal devido a:
+                                <ul class="list-circle list-inside ml-4">
+                                    <li>Complexidade e tempo de treinamento.</li>
+                                    <li>Alta sensibilidade a hiperparâmetros.</li>
+                                    <li>Tendência a overfitting e fraca generalização nos testes (ex: DRL com -38.51% de retorno).</li>
+                                    <li>Menor interpretabilidade.</li>
+                                </ul>
+                            </li>
+                        </ul>
+                        <h4 class="font-medium mt-2">Reprodutibilidade:</h4>
+                        <p>Fixação de seeds aleatórias e corte temporal rígido nos dados (sem dados pós-2024 para treino/validação) para evitar look-ahead bias.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="backtesting" class="content-section card">
+            <h2 class="text-2xl font-semibold mb-4">Setup de Backtesting</h2>
+            <p class="mb-3">Para avaliar o desempenho da estratégia principal, baseada em indicadores técnicos, foi implementado um ambiente de backtesting simulado. Este ambiente reproduz condições de mercado para um período determinado, utilizando dados históricos.</p>
+            <ul class="list-disc list-inside space-y-1">
+                <li><strong class="font-semibold">Loop Temporal:</strong> Itera sobre cada passo de tempo (dia ou intervalo de 5 minutos) no dataset de teste.</li>
+                <li><strong class="font-semibold">Execução de Decisões:</strong> A lógica da estratégia de indicadores gera sinais (compra, venda, manutenção) que são executados.</li>
+                <li><strong class="font-semibold">Cálculo de Retorno:</strong> O ambiente revela o próximo preço e calcula o retorno da posição, atualizando o capital do portfólio.</li>
+            </ul>
+            <h3 class="text-xl font-medium mt-4 mb-2">Parâmetros de Simulação</h3>
+            <ul class="list-disc list-inside space-y-1">
+                <li><strong class="font-semibold">Capital Inicial:</strong> Ex: R$100.000 ou $100.000 (para DRL).</li>
+                <li><strong class="font-semibold">Posições:</strong> Negociação de um único ativo (comprado, vendido ou neutro).</li>
+                <li><strong class="font-semibold">Custos de Transação:</strong> Taxa fixa por trade ou spread (ex: 0.1% para DRL, 0.2% para RSI).</li>
+                <li><strong class="font-semibold">Alavancagem:</strong> Não significativa.</li>
+            </ul>
+             <h3 class="text-xl font-medium mt-4 mb-2">Recursos e Execução</h3>
+            <ul class="list-disc list-inside space-y-1">
+                <li><strong class="font-semibold">Hardware:</strong> Executado em Google Colab (CPU para backtest de indicadores, GPU para treino exploratório de LSTM/DRL).</li>
+                <li><strong class="font-semibold">Procedimento:</strong> Execução do script `main.py`, que carrega dados, aplica a estratégia e gera relatório de desempenho.</li>
+            </ul>
+        </section>
+
+        <section id="resultados" class="content-section card">
+            <h2 class="text-2xl font-semibold mb-4">Discussão dos Resultados</h2>
+            <p class="mb-3">A avaliação dos resultados da estratégia principal (baseada em indicadores técnicos) e das abordagens exploratórias (como DRL) revelou pontos fortes, limitações e insights importantes sobre o desempenho em diferentes cenários.</p>
+
+            <div class="mb-4">
+                <div class="flex space-x-2 mb-3 border-b">
+                    <button class="tab-button py-2 px-4 rounded-t active" data-tab="indicadores">Estratégia de Indicadores (RSI-14)</button>
+                    <button class="tab-button py-2 px-4 rounded-t" data-tab="drl">Agente DRL (PPO)</button>
+                    <button class="tab-button py-2 px-4 rounded-t" data-tab="comparativo">Comparativo Geral</button>
+                </div>
+
+                <div id="indicadores-content" class="tab-content">
+                    <h3 class="text-xl font-medium mb-2">Desempenho da Estratégia Principal (Indicadores Técnicos - RSI-14)</h3>
+                    <p class="mb-2">Período de avaliação do backtest: Maio a Agosto de 2020.</p>
+                    <div class="grid md:grid-cols-2 gap-4 items-start">
+                        <div>
+                            <p class="metric-item"><span>Retorno no Período:</span> <span class="text-green-600 font-semibold">+7.14%</span></p>
+                            <p class="metric-item"><span>Drawdown Máximo:</span> <span class="text-red-600 font-semibold">-9.5%</span></p>
+                            <p class="metric-item"><span>Sharpe Ratio:</span> <span class="font-semibold">1.145</span></p>
+
+                            <h4 class="font-medium mt-4 mb-1">Pontos Fortes:</h4>
+                            <ul class="list-disc list-inside text-sm space-y-1">
+                                <li>Capacidade de capturar certas tendências de mercado.</li>
+                                <li>Decisões enriquecidas por um conjunto diversificado de indicadores.</li>
+                                <li>Interpretabilidade da lógica baseada em regras.</li>
+                                <li>Controles de risco (stop-loss) limitaram perdas.</li>
+                            </ul>
+                            <h4 class="font-medium mt-3 mb-1">Limitações:</h4>
+                            <ul class="list-disc list-inside text-sm space-y-1">
+                                <li>Dificuldade em mercados laterais (sem tendência clara).</li>
+                                <li>Risco de overfitting dos parâmetros dos indicadores.</li>
+                                <li>Questões de generalização para diferentes períodos/ativos.</li>
+                            </ul>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="indicadoresChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="drl-content" class="tab-content hidden">
+                    <h3 class="text-xl font-medium mb-2">Desempenho do Agente DRL (RLStrategy - PPO)</h3>
+                    <p class="mb-2">Resultados detalhados do backtest com `backtesting.py`.</p>
+                     <div class="grid md:grid-cols-2 gap-6 items-start">
+                        <div class="space-y-3">
+                            <h4 class="text-lg font-medium mb-1">Contexto do Backtest:</h4>
+                            <ul class="text-sm space-y-1">
+                                <li class="metric-item"><span>Período:</span> <span>04/08/2020 a 24/08/2020</span></li>
+                                <li class="metric-item"><span>Duração:</span> <span>~19 dias</span></li>
+                                <li class="metric-item"><span>Capital Inicial:</span> <span>$100,000</span></li>
+                                <li class="metric-item"><span>Comissão por Transação:</span> <span>0.1%</span></li>
+                            </ul>
+
+                            <h4 class="text-lg font-medium mt-4 mb-1">Métricas de Desempenho da RLStrategy (PPO):</h4>
+                            <ul class="text-sm space-y-1">
+                                <li class="metric-item"><span>Retorno Final:</span> <span class="text-red-600 font-semibold">-38.51%</span></li>
+                                <li class="metric-item"><span>Patrimônio Final:</span> <span>$61,493.22</span></li>
+                                <li class="metric-item"><span>Máximo Drawdown:</span> <span class="text-red-600 font-semibold">-39.05%</span></li>
+                                <li class="metric-item"><span>Sharpe Ratio:</span> <span class="text-red-500 font-semibold">-10949.96</span></li>
+                                <li class="metric-item"><span>Número de Trades:</span> <span>305</span></li>
+                                <li class="metric-item"><span>Comissões Pagas:</span> <span class="text-red-500">$46,713.63</span></li>
+                                <li class="metric-item"><span>Taxa de Acerto:</span> <span>52.13%</span></li>
+                                <li class="metric-item"><span>Profit Factor:</span> <span>1.57</span></li>
+                            </ul>
+                             <h4 class="text-lg font-medium mt-4 mb-1">Comparação (mesmo período):</h4>
+                             <p class="metric-item"><span>Retorno Buy & Hold:</span> <span class="text-green-600 font-semibold">+14.35%</span></p>
+
+                            <h4 class="text-lg font-medium mt-4 mb-1">Conclusão (RLStrategy PPO - Agosto 2020):</h4>
+                            <p class="mt-1 text-sm">A estratégia de RL (PPO) teve um desempenho significativamente inferior ao benchmark Buy and Hold neste backtest específico, resultando em uma perda considerável do capital inicial. O alto número de trades gerou comissões elevadas, e o Sharpe Ratio extremamente negativo indicou um péssimo retorno ajustado ao risco.</p>
+                            <p class="mt-1 text-sm">Abaixo, visualizações ilustrativas do drawdown e da recompensa acumulada para o agente DRL.</p>
+                        </div>
+                        <div>
+                            <div class="chart-container mb-6">
+                                <canvas id="drlDrawdownChart"></canvas>
+                            </div>
+                            <div class="chart-container">
+                                <canvas id="drlRewardChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="comparativo-content" class="tab-content hidden">
+                    <h3 class="text-xl font-medium mb-2">Comparativo Geral e Benchmark</h3>
+                    <p class="mb-2">A estratégia principal (indicadores RSI-14) geralmente superou o Buy & Hold no período testado, mas com maior volatilidade. Custos de transação podem erodir essa vantagem.</p>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-white border">
+                            <thead>
+                                <tr class="bg-gray-100">
+                                    <th class="py-2 px-3 border-b text-left">Estratégia</th>
+                                    <th class="py-2 px-3 border-b text-left">Período</th>
+                                    <th class="py-2 px-3 border-b text-right">Retorno (%)</th>
+                                    <th class="py-2 px-3 border-b text-right">Max Drawdown (%)</th>
+                                    <th class="py-2 px-3 border-b text-right">Sharpe Ratio</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="py-2 px-3 border-b">Indicadores Técnicos (RSI-14)</td>
+                                    <td class="py-2 px-3 border-b">Maio-Ago 2020</td>
+                                    <td class="py-2 px-3 border-b text-right text-green-600">+7.14</td>
+                                    <td class="py-2 px-3 border-b text-right text-red-600">-9.5</td>
+                                    <td class="py-2 px-3 border-b text-right">1.145</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-2 px-3 border-b">Agente DRL (PPO)</td>
+                                    <td class="py-2 px-3 border-b">Agosto 2020</td>
+                                    <td class="py-2 px-3 border-b text-right text-red-600">-38.51</td>
+                                    <td class="py-2 px-3 border-b text-right text-red-600">-39.05</td>
+                                    <td class="py-2 px-3 border-b text-right text-red-500">-10949.96</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-2 px-3 border-b">Buy & Hold (ref. DRL Agosto 2020)</td>
+                                    <td class="py-2 px-3 border-b">Agosto 2020</td>
+                                    <td class="py-2 px-3 border-b text-right text-green-600">+14.35</td>
+                                    <td class="py-2 px-3 border-b text-right">-</td>
+                                    <td class="py-2 px-3 border-b text-right">-</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <h4 class="font-medium mt-3 mb-1">Conclusões Gerais dos Resultados:</h4>
+                    <ul class="list-disc list-inside text-sm space-y-1">
+                        <li>A abordagem principal (indicadores RSI-14) tem potencial para gerar alfa.</li>
+                        <li>Calibragem adicional é benéfica para robustez.</li>
+                        <li>Modelos LSTM/DRL mostraram-se desafiadores para este escopo, com o DRL (PPO) apresentando perdas significativas no backtest detalhado.</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <section id="planos-futuro" class="content-section card">
+            <h2 class="text-2xl font-semibold mb-4">Planos para o Futuro: Aprimorando o Agente DRL</h2>
+            <p class="mb-3">Apesar dos desafios encontrados com o Agente de Aprendizado por Reforço Profundo (DRL) na fase atual do projeto, esta abordagem continua promissora para o desenvolvimento de estratégias de trading adaptativas. A seguir, detalhamos áreas chave de exploração para aprimorar o modelo DRL e buscar uma solução mais robusta e funcional:</p>
+
+            <h4 class="section-subtitle text-lg">1. Engenharia da Função de Recompensa (Reward Shaping)</h4>
+            <ul class="list-disc list-inside space-y-1 mb-3 text-sm">
+                <li>Explorar funções de recompensa mais sofisticadas que incentivem comportamentos desejáveis de forma mais direta.</li>
+                <li>Considerar recompensas baseadas em métricas de risco-retorno (ex: Sharpe Ratio incremental), ou que penalizem overtrading e alta volatilidade.</li>
+                <li>Incorporar recompensas intermediárias para guiar o aprendizado em tarefas complexas.</li>
+            </ul>
+
+            <h4 class="section-subtitle text-lg">2. Definição do Espaço de Estados e Ações</h4>
+            <ul class="list-disc list-inside space-y-1 mb-3 text-sm">
+                <li><strong class="font-semibold">Espaço de Estados:</strong> Enriquecer com mais indicadores, dados de sentimento (se viável), ou informações sobre volatilidade/regime de mercado. Investigar impacto da normalização e representação dos dados.</li>
+                <li><strong class="font-semibold">Espaço de Ações:</strong> Testar diferentes granularidades para as ações (ex: percentual do capital a alocar) e incluir "manter posição" explicitamente.</li>
+            </ul>
+
+            <h4 class="section-subtitle text-lg">3. Arquitetura do Modelo e Algoritmos de DRL</h4>
+            <ul class="list-disc list-inside space-y-1 mb-3 text-sm">
+                <li><strong class="font-semibold">Arquitetura da Rede Neural:</strong> Experimentar redes mais complexas ou especializadas (ex: redes com atenção).</li>
+                <li><strong class="font-semibold">Algoritmos de DRL:</strong> Avaliar algoritmos mais recentes ou robustos (ex: PPO, SAC, Rainbow DQN) para melhor estabilidade e eficiência.</li>
+                <li><strong class="font-semibold">Regularização:</strong> Aplicar técnicas mais fortes (dropout, L1/L2) para combater overfitting.</li>
+            </ul>
+
+            <h4 class="section-subtitle text-lg">4. Otimização de Features e Hiperparâmetros com Algoritmos Evolutivos</h4>
+            <ul class="list-disc list-inside space-y-1 mb-3 text-sm">
+                <li>Utilizar algoritmos genéticos (ou outras técnicas de computação evolutiva) para explorar automaticamente combinações eficientes de features (indicadores técnicos) e otimizar os hiperparâmetros do agente DRL, buscando configurações que maximizem o desempenho em diferentes condições de mercado.</li>
+            </ul>
+
+            <h4 class="section-subtitle text-lg">5. Gerenciamento de Risco Integrado</h4>
+            <ul class="list-disc list-inside space-y-1 mb-3 text-sm">
+                <li>Incorporar mecanismos de gerenciamento de risco diretamente na lógica do agente ou na função de recompensa (ex: stop-loss dinâmico, limites de exposição).</li>
+            </ul>
+
+            <h4 class="section-subtitle text-lg">6. Treinamento e Validação Robustos</h4>
+            <ul class="list-disc list-inside space-y-1 mb-3 text-sm">
+                <li><strong class="font-semibold">Dados de Treinamento:</strong> Utilizar conjuntos de dados maiores e mais diversificados, abrangendo diferentes regimes de mercado.</li>
+                <li><strong class="font-semibold">Validação Cruzada:</strong> Implementar técnicas específicas para séries temporais (ex: walk-forward optimization).</li>
+                <li><strong class="font-semibold">Simulação de Custos:</strong> Refinar a simulação de custos de transação e slippage.</li>
+                <li><strong class="font-semibold">Combate à Não-Estacionariedade:</strong> Explorar técnicas para adaptação a mudanças nas dinâmicas do mercado (meta-learning, treinamento contínuo).</li>
+            </ul>
+
+            <h4 class="section-subtitle text-lg">7. Exploração vs. Explotação</h4>
+            <ul class="list-disc list-inside space-y-1 mb-3 text-sm">
+                <li>Ajustar e otimizar as estratégias de exploração (ex: epsilon-greedy com decaimento, UCB) para garantir exploração suficiente antes da convergência.</li>
+            </ul>
+
+            <h4 class="section-subtitle text-lg">8. Interpretabilidade e Análise do Comportamento</h4>
+            <ul class="list-disc list-inside space-y-1 mb-3 text-sm">
+                <li>Desenvolver ferramentas ou técnicas para entender melhor as decisões do agente DRL, identificando features ou condições de mercado influentes.</li>
+            </ul>
+
+            <p class="mt-4 text-sm">Acreditamos que, ao abordar sistematicamente estas áreas, é possível superar os desafios atuais e desenvolver um agente DRL que contribua significativamente para estratégias de trading automatizado.</p>
+        </section>
+
+        <footer class="text-center text-sm text-gray-500 mt-10 py-4 border-t">
+            Relatório Interativo gerado a partir do README do VIII Desafio de Ciência de Dados.
+        </footer>
+    </main>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const navLinks = document.querySelectorAll('.nav-link');
+        const contentSections = document.querySelectorAll('.content-section');
+
+        function updateActiveSection() {
+            let currentSectionId = window.location.hash || '#visao-geral';
+            if (currentSectionId === '#') currentSectionId = '#visao-geral';
+
+            navLinks.forEach(link => {
+                if (link.getAttribute('href') === currentSectionId) {
+                    link.classList.add('active');
+                } else {
+                    link.classList.remove('active');
+                }
+            });
+
+            contentSections.forEach(section => {
+                if (section.id === currentSectionId.substring(1)) {
+                    section.classList.add('active');
+                } else {
+                    section.classList.remove('active');
+                }
+            });
+        }
+
+        navLinks.forEach(link => {
+            link.addEventListener('click', function (e) {
+                const targetId = this.getAttribute('href');
+                window.location.hash = targetId;
+            });
+        });
+
+        window.addEventListener('hashchange', updateActiveSection);
+        updateActiveSection();
+
+        const accordionToggles = document.querySelectorAll('.accordion-toggle');
+        accordionToggles.forEach(toggle => {
+            toggle.addEventListener('click', function() {
+                const targetId = this.dataset.target;
+                const content = document.getElementById(targetId);
+                content.classList.toggle('hidden');
+                this.classList.toggle('bg-gray-200');
+            });
+        });
+
+        const tabButtons = document.querySelectorAll('.tab-button');
+        const tabContents = document.querySelectorAll('.tab-content');
+
+        tabButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                tabButtons.forEach(btn => btn.classList.remove('active'));
+                this.classList.add('active');
+
+                const targetTab = this.dataset.tab + '-content';
+                tabContents.forEach(content => {
+                    if (content.id === targetTab) {
+                        content.classList.remove('hidden');
+                    } else {
+                        content.classList.add('hidden');
+                    }
+                });
+            });
+        });
+
+        const generateIllustrativeEquityDataRSI = (points, startValue, targetReturnPercent, peakPercentAboveStart, drawdownPercentFromPeak) => {
+            const data = [];
+            let currentValue = startValue;
+            const peakValue = startValue * (1 + peakPercentAboveStart / 100);
+            const troughValueAfterPeak = peakValue * (1 - drawdownPercentFromPeak / 100);
+            const endValue = startValue * (1 + targetReturnPercent / 100);
+
+            const peakPointIndex = Math.floor(points * 0.6);
+            const troughPointIndex = Math.floor(points * 0.75);
+
+            for (let i = 0; i < points; i++) {
+                if (i < peakPointIndex) {
+                    currentValue = startValue + (peakValue - startValue) * (i / peakPointIndex) + (Math.random() - 0.5) * startValue * 0.03;
+                } else if (i < troughPointIndex) {
+                    currentValue = peakValue - (peakValue - troughValueAfterPeak) * ((i - peakPointIndex) / (troughPointIndex - peakPointIndex)) + (Math.random() - 0.5) * startValue * 0.02;
+                } else {
+                    currentValue = troughValueAfterPeak + (endValue - troughValueAfterPeak) * ((i - troughPointIndex) / (points - 1 - troughPointIndex)) + (Math.random() - 0.5) * startValue * 0.02;
+                }
+                currentValue = Math.max(startValue * 0.7, currentValue);
+                data.push(currentValue);
+            }
+            data[points - 1] = endValue * (0.99 + Math.random() * 0.02);
+            data[peakPointIndex -1 ] = Math.min(data[peakPointIndex-1], peakValue * (1.0 + Math.random()*0.02));
+            if (troughPointIndex < points && peakPointIndex < troughPointIndex) {
+                 data[troughPointIndex-1] = Math.max(data[troughPointIndex-1], troughValueAfterPeak * (1.0 - Math.random()*0.01));
+            }
+            return data;
+        };
+
+        const generateIllustrativeDrawdownData = (points, maxDrawdown) => {
+            const data = [0];
+            let currentDrawdown = 0;
+            let minPointReached = false;
+            for (let i = 1; i < points; i++) {
+                if (!minPointReached && Math.random() < 0.6 && currentDrawdown > maxDrawdown * 0.9) {
+                     currentDrawdown += (maxDrawdown - currentDrawdown) * Math.random() * 0.3;
+                } else if (currentDrawdown > maxDrawdown + 0.05) {
+                     currentDrawdown -= Math.random() * 0.02;
+                } else {
+                    currentDrawdown -= Math.random() * 0.03;
+                }
+
+                if (currentDrawdown < maxDrawdown && !minPointReached) {
+                    currentDrawdown = maxDrawdown;
+                    minPointReached = true;
+                }
+                 if (minPointReached && currentDrawdown < maxDrawdown * 1.1 && Math.random() > 0.6) {
+                    currentDrawdown += Math.random() * 0.015;
+                }
+                data.push(Math.min(0, currentDrawdown));
+            }
+            if (!data.some(d => d.toFixed(4) === maxDrawdown.toFixed(4))) {
+                const midPoint = Math.floor(points / 2);
+                data[midPoint] = maxDrawdown;
+                for(let i = midPoint + 1; i < points; i++) {
+                    data[i] = Math.min(0, data[i-1] + (Math.random() - 0.45) * 0.02);
+                }
+            }
+            return data.map(d => d * 100);
+        };
+
+        const generateIllustrativeRewardData = (points, finalReward, peakReward, initialDip) => {
+            const data = [0];
+            let currentValue = 0;
+            const peakPoint = Math.floor(points * 0.85);
+            const finalPoint = points - 1;
+
+            for (let i = 1; i < points; i++) {
+                let increment;
+                if (i < points * 0.3) {
+                    increment = (Math.random() - 0.55 + initialDip) * 0.02;
+                } else if (i < peakPoint) {
+                    increment = (peakReward - currentValue) / (peakPoint - i) * (0.8 + Math.random() * 0.4);
+                } else {
+                    increment = (finalReward - currentValue) / (finalPoint - i + 1) * (0.8 + Math.random() * 0.4);
+                }
+                currentValue += increment;
+                currentValue = Math.max(-0.02, currentValue);
+                data.push(currentValue);
+            }
+            data[finalPoint] = finalReward + (Math.random() - 0.5) * 0.005;
+             if(Math.abs(data[peakPoint-1] - peakReward) > 0.01 ) data[peakPoint-1] = peakReward * (0.98 + Math.random()*0.04);
+            return data;
+        };
+
+        const indicadoresCtx = document.getElementById('indicadoresChart');
+        if (indicadoresCtx) {
+            const equityData = generateIllustrativeEquityDataRSI(60, 100, 7.14, 10, 9.5);
+            new Chart(indicadoresCtx, {
+                type: 'line',
+                data: {
+                    labels: Array.from({length: 60}, (_, i) => `Dia ${i+1}`),
+                    datasets: [{
+                        label: 'Evolução do Patrimônio (RSI-14 Ilustrativo)',
+                        data: equityData,
+                        borderColor: '#48D1CC',
+                        backgroundColor: 'rgba(72, 209, 204, 0.1)',
+                        tension: 0.1,
+                        fill: true,
+                        pointRadius: 0,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            title: { display: true, text: 'Valor do Patrimônio (Início = 100)' }
+                        }
+                    },
+                    plugins: {
+                        title: { display: true, text: 'Desempenho Estratégia Indicadores RSI-14 (Maio-Ago 2020)' },
+                        tooltip: { mode: 'index', intersect: false }
+                    }
+                }
+            });
+        }
+
+        const drlCtx = document.getElementById('drlDrawdownChart');
+        if (drlCtx) {
+            const drawdownData = generateIllustrativeDrawdownData(20, -0.3905);
+            new Chart(drlCtx, {
+                type: 'line',
+                data: {
+                    labels: Array.from({length: 20}, (_, i) => `Dia ${i+1}`),
+                    datasets: [{
+                        label: 'Curva de Drawdown (%) (Ilustrativo)',
+                        data: drawdownData,
+                        borderColor: 'rgb(255, 99, 132)',
+                        backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                        tension: 0.1,
+                        fill: true,
+                        pointRadius: 0,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            title: { display: true, text: 'Drawdown (%)' },
+                            ticks: { callback: function(value) { return value + '%'; } }
+                        }
+                    },
+                    plugins: {
+                        title: { display: true, text: 'Drawdown Agente DRL (Agosto 2020)' },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: { label: function(context) { return `Drawdown: ${context.parsed.y.toFixed(2)}%`; } }
+                        }
+                    }
+                }
+            });
+        }
+
+        const drlRewardCtx = document.getElementById('drlRewardChart');
+        if (drlRewardCtx) {
+            const rewardData = generateIllustrativeRewardData(25, 0.116, 0.14, -0.01);
+            new Chart(drlRewardCtx, {
+                type: 'line',
+                data: {
+                    labels: Array.from({length: 25}, (_, i) => `Passo ${i*100}`),
+                    datasets: [{
+                        label: 'Recompensa Acumulada (Ilustrativo)',
+                        data: rewardData,
+                        borderColor: 'rgb(75, 192, 192)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                        tension: 0.1,
+                        fill: true,
+                        pointRadius: 0,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            title: { display: true, text: 'Recompensa Acumulada' },
+                            ticks: { callback: function(value) { return value.toFixed(2); } }
+                        },
+                        x: {
+                             title: { display: true, text: 'Passos de Tempo' }
+                        }
+                    },
+                    plugins: {
+                        title: { display: true, text: 'Recompensa Acumulada DRL (Backtesting)' },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: { label: function(context) { return `Recompensa: ${context.parsed.y.toFixed(4)}`; } }
+                        }
+                    }
+                }
+            });
+        }
+    });
+</script>
+</body>
+</html>
